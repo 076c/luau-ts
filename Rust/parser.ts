@@ -9,7 +9,8 @@ export enum StatementType {
 	Assignment,
 	ReAssignment,
 	IfStatement,
-	Expression
+	ReturnStatement,
+	ExpressionStatement,
 }
 
 export enum ExpressionType {
@@ -19,6 +20,7 @@ export enum ExpressionType {
 	Identifier,
 	BinaryExpression,
 	Grouping,
+	FunctionCall,
 	UnaryExpression,
 }
 
@@ -148,7 +150,17 @@ export class GroupingExpression extends Expression {
 		super(ExpressionType.Grouping)
 		this.expression = expression
 	}
+}
 
+export class FunctionCallExpression extends Expression {
+	callee!: Expression
+	args!: Array<Expression>
+
+	constructor(callee: Expression, args: Array<Expression>) {
+		super(ExpressionType.FunctionCall)
+		this.callee = callee
+		this.args = args
+	}
 }
 
 export class UnknownExpression extends Expression {
@@ -197,6 +209,26 @@ export class IfStatement extends Statement {
 	}
 }
 
+export class ExpressionStatement extends Statement {
+	expression!: Expression
+
+	constructor(expression: Expression) {
+		super(StatementType.ExpressionStatement)
+		this.expression = expression
+	}
+}
+
+export class ReturnStatement extends Statement {
+	implicit!: boolean
+	expressions: Array<Expression>
+
+	constructor(implicit: boolean, expressions: Array<Expression>) {
+		super(StatementType.ReturnStatement)
+		this.implicit = implicit
+		this.expressions = expressions
+	}
+}
+
 export class Program {
 	kind = "Program"
 	statements!: Array<Statement>
@@ -242,7 +274,7 @@ export function parse(tokens: Array<Token>) {
 	let tokenIndex = 0
 
 	function parserError(error: string, loc: LocRange | undefined) {
-		throw console.error(`parser: ${error}${loc !== undefined && ` line: ${loc.line} column ${loc.startingColumn}-${loc.endingColumn}` || ""}`)
+		throw console.error(`parser: ${error}${loc !== undefined ? ` line: ${loc.line} column ${loc.startingColumn}-${loc.endingColumn}` : ""}`)
 	}
 
 	function eat(): Token {
@@ -315,7 +347,7 @@ export function parse(tokens: Array<Token>) {
 			return new UnaryExpression(op, expression)
 		}
 
-		return parsePrimaryExpression()
+		return parseFunctionCall()
 	}
 
 	function parseMultiplicativeExpression(): Expression {
@@ -349,8 +381,8 @@ export function parse(tokens: Array<Token>) {
 	function parseLogAndExpression(): Expression {
 		let left = parseEqualComparisonExpression()
 
-		while (current().typeOf() == TokenType.Ampersand && tokens.at(tokenIndex).tokenType == TokenType.Ampersand) {
-			let op = eat().token + eat().token // & & & -> &&
+		while (current().typeOf() == TokenType.Ampersand && tokens.at(tokenIndex + 1).tokenType == TokenType.Ampersand) {
+			let op = eat().token + eat().token // & & -> &&
 
 			left = new BinaryExpression(left, op, parseEqualComparisonExpression())
 		}
@@ -361,9 +393,9 @@ export function parse(tokens: Array<Token>) {
 	function parseBitAndExpression(): Expression {
 		let left = parseAdditiveExpression()
 
-		while (current().typeOf() == TokenType.Add || current().typeOf() == TokenType.Sub) {
+		// single '&' (bitwise) — avoid consuming '&&' (logical and)
+		while (current()?.typeOf() == TokenType.Ampersand && tokens.at(tokenIndex + 1)?.tokenType != TokenType.Ampersand) {
 			let op = eat().token
-
 			left = new BinaryExpression(left, op, parseAdditiveExpression())
 		}
 
@@ -397,8 +429,8 @@ export function parse(tokens: Array<Token>) {
 	function parseEqualComparisonExpression(): Expression {
 		let left = parseBitOrExpression()
 
-		while (current().typeOf() == TokenType.Equal && (tokens.at(tokenIndex).tokenType == TokenType.Equal || tokens.at(tokenIndex).tokenType == TokenType.Exclamation)) {
-			let op = eat().token + eat().token // = & = -> ==
+		while (current().typeOf() == TokenType.Equal && (tokens.at(tokenIndex + 1).tokenType == TokenType.Equal || tokens.at(tokenIndex + 1).tokenType == TokenType.Exclamation)) {
+			let op = eat().token + eat().token // = = -> ==
 
 			left = new BinaryExpression(left, op, parseBitOrExpression())
 		}
@@ -409,13 +441,32 @@ export function parse(tokens: Array<Token>) {
 	function parseLogOrExpression(): Expression {
 		let left = parseLogAndExpression()
 
-		while (current().typeOf() == TokenType.Pipe && tokens.at(tokenIndex).tokenType == TokenType.Pipe) {
-			let op = eat().token + eat().token // | & | -> ||
+		while (current().typeOf() == TokenType.Pipe && tokens.at(tokenIndex + 1).tokenType == TokenType.Pipe) {
+			let op = eat().token + eat().token // | | -> ||
 
 			left = new BinaryExpression(left, op, parseLogAndExpression())
 		}
 
 		return left
+	}
+
+	function parseFunctionCall(): Expression {
+		let expr = parsePrimaryExpression()
+		let isMacro = current().tokenType == TokenType.Exclamation ? eat() && true : false
+
+		while (current().tokenType == TokenType.OpeningParens) {
+			let openingParen = eat()
+			let args = []
+
+			while (current().tokenType != TokenType.ClosingParens) {
+				args.push(parsePrimaryExpression())
+			}
+
+			let closingParen = eat()
+			expr = new FunctionCallExpression(expr, args)
+		}
+
+		return expr
 	}
 
 	function parseExpression(): Expression {
@@ -490,7 +541,7 @@ export function parse(tokens: Array<Token>) {
 		return new IfStatement(condition, trueBody, elseIfBody, elseBody)
 	}
 
-	function parseAssignment() {
+	function parseAssignment(): Assignment {
 		let keyword = eatTypeOf(TokenType.Keyword)
 		let mutable = false
 
@@ -515,6 +566,16 @@ export function parse(tokens: Array<Token>) {
 		return new Assignment([new VarDef(name, type)], expressions, mutable)
 	}
 
+	function parseExpressionStatement(): ExpressionStatement | ReturnStatement {
+		let expr = parseExpression()
+
+		if (current().tokenType == TokenType.Semicolon) {
+			return new ReturnStatement(true, new Array<Expression>(expr))
+		} else {
+			return new ExpressionStatement(expr)
+		}
+	}
+
 	function parseStatement() {
 		if (current().tokenType == TokenType.Keyword && current().token == "let") {
 			return parseAssignment()
@@ -522,6 +583,8 @@ export function parse(tokens: Array<Token>) {
 			return parseReAssignment()
 		} else if (current().tokenType == TokenType.Keyword && current().token == "if") {
 			return parseIfStatement()
+		} else {
+			return parseExpressionStatement()
 		}
 	}
 

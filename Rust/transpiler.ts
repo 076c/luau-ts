@@ -34,11 +34,86 @@ export function transpile(program: Parser.Program) {
 			case Parser.ExpressionType.Number:
 				return new LuauAst.LuauNumberExpression((expression as Parser.NumberExpression).number)
 			case Parser.ExpressionType.BinaryExpression:
-				return new LuauAst.LuauBinaryExpression(transpileExpression((expression as Parser.BinaryExpression).left), (expression as Parser.BinaryExpression).op, transpileExpression((expression as Parser.BinaryExpression).right))
+				{
+					let bin = expression as Parser.BinaryExpression
+					let left = transpileExpression(bin.left)
+					let right = transpileExpression(bin.right)
+					// convert bitwise ops to bit32.* calls
+					switch (bin.op) {
+						case '&':
+							return new LuauAst.LuauFunctionCallExpression(new LuauAst.LuauIdentifierExpression('bit32.band'), [left, right])
+						case '|':
+							return new LuauAst.LuauFunctionCallExpression(new LuauAst.LuauIdentifierExpression('bit32.bor'), [left, right])
+						case '^':
+							return new LuauAst.LuauFunctionCallExpression(new LuauAst.LuauIdentifierExpression('bit32.bxor'), [left, right])
+						default:
+							return new LuauAst.LuauBinaryExpression(left, bin.op, right)
+					}
+				}
 			case Parser.ExpressionType.UnaryExpression:
 				return new LuauAst.LuauUnaryExpression((expression as Parser.UnaryExpression).op, transpileExpression((expression as Parser.UnaryExpression).expression))
+			case Parser.ExpressionType.FunctionCall:
+				return new LuauAst.LuauFunctionCallExpression(transpileExpression((expression as Parser.FunctionCallExpression).callee), (expression as Parser.FunctionCallExpression).args.map((e) => transpileExpression(e)))
 			default:
 				return new LuauAst.LuauUnknownExpression()
+		}
+	}
+
+	function transpileStatement(statement: Parser.Statement): LuauAst.LuauStatement | undefined {
+		switch (statement.statementType) {
+			case Parser.StatementType.Assignment: {
+				let variables = new Array<LuauAst.LuauVarDef>()
+				let assignment = statement as Parser.Assignment
+				assignment.locals.forEach((local) => variables.push(transpileVarDef(local as Parser.VarDef)))
+
+				let expressions = new Array<LuauAst.LuauExpression>()
+				assignment.values.forEach((e) => expressions.push(transpileExpression(e)))
+
+				return new LuauAst.LuauAssignment(variables, expressions)
+			}
+			case Parser.StatementType.ExpressionStatement: {
+				let exprStmt = statement as any
+				let e = transpileExpression(exprStmt.expression)
+				return new LuauAst.LuauExpressionStatement(e)
+			}
+			case Parser.StatementType.IfStatement: {
+				let ifs = statement as Parser.IfStatement
+				let condition = transpileExpression(ifs.condition)
+				// transpile trueBody chunk
+				let trueBody: Array<LuauAst.LuauStatement> = []
+				ifs.trueBody.statements.forEach((s) => {
+					let ts = transpileStatement(s)
+					if (ts) trueBody.push(ts)
+				})
+
+				let elseIf: LuauAst.LuauIfStatement | undefined = undefined
+				if (ifs.elseIfStatement) {
+					let eIf = transpileStatement(ifs.elseIfStatement) as LuauAst.LuauIfStatement
+					elseIf = eIf
+				}
+
+				let elseBody: Array<LuauAst.LuauStatement> | undefined = undefined
+				if (ifs.elseBody) {
+					// elseBody may be a Chunk or an IfStatement depending on parser handling; handle both
+					if ((ifs.elseBody as any).statements) {
+						elseBody = []
+							; (ifs.elseBody as any).statements.forEach((s: Parser.Statement) => {
+								let ts = transpileStatement(s)
+								if (ts) elseBody!.push(ts)
+							})
+					} else {
+						// elseBody might be an IfStatement in some parser constructions; wrap it as an elseif
+						let nestedIf = transpileStatement(ifs.elseBody as Parser.IfStatement) as LuauAst.LuauIfStatement
+						elseBody = undefined
+						// signal elseif by assigning to elseIf
+						elseIf = nestedIf
+					}
+				}
+
+				return new LuauAst.LuauIfStatement(condition, trueBody, elseIf, elseBody)
+			}
+			default:
+				return undefined
 		}
 	}
 
@@ -56,18 +131,8 @@ export function transpile(program: Parser.Program) {
 		let statement = program.statements.at(index)
 		if (statement == undefined) break
 
-		if (statement.statementType == Parser.StatementType.Assignment) {
-			let variables = new Array<LuauAst.LuauVarDef>()
-			let assignment = statement as Parser.Assignment
-
-			assignment.locals.forEach((local) => variables.push(transpileVarDef(local as Parser.VarDef)))
-
-			let expressions = new Array<LuauAst.LuauExpression>()
-			assignment.values.forEach((e) => expressions.push(transpileExpression(e)))
-
-			let transpiled = new LuauAst.LuauAssignment(variables, expressions)
-			statements.push(transpiled)
-		}
+		let ts = transpileStatement(statement)
+		if (ts) statements.push(ts)
 
 		index++
 	}
@@ -98,7 +163,7 @@ export function transpile(program: Parser.Program) {
 
 export function test() {
 	let samples = [
-		"let a = *b;"
+		"let a = b()()"
 	]
 
 	samples.forEach((source) => {

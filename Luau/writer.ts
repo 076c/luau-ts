@@ -8,6 +8,14 @@ export function write(ast: LuauAst.LuauProgram) {
 	let source = ""
 	let index = 0
 
+	// indentation support
+	let indentLevel = 0
+	const INDENT = "\t"
+
+	function indent(): string {
+		return INDENT.repeat(indentLevel)
+	}
+
 	function writeExpressions(expressions: Array<LuauAst.LuauExpression>): string {
 		let written = []
 
@@ -28,6 +36,12 @@ export function write(ast: LuauAst.LuauProgram) {
 				case LuauAst.LuauExpressionType.UnaryExpression:
 					written.push(writeUnaryExpression(expression as LuauAst.LuauUnaryExpression))
 					break
+				case LuauAst.LuauExpressionType.FunctionCall:
+					written.push(writeFunctionCallExpression(expression as LuauAst.LuauFunctionCallExpression))
+					break
+				default:
+					written.push("--[[ UNKNOWN EXPRESSION ]]")
+					break
 			}
 		})
 
@@ -35,12 +49,11 @@ export function write(ast: LuauAst.LuauProgram) {
 	}
 
 	function writeTypeDef(typeDef: LuauAst.LuauTypeDef): string {
-		let loc = ""
+		let args = "<"
+		typeDef.additionalArguments.forEach((type) => args += writeTypeDef(type))
+		args += ">"
 
-		loc += writeExpressions(new Array<LuauAst.LuauExpression>(typeDef.type))
-		typeDef.additionalArguments.forEach((type) => loc += writeTypeDef(type))
-
-		return loc
+		return `${writeExpressions(new Array<LuauAst.LuauExpression>(typeDef.type))}${args != "<>" ? args : ""}`
 	}
 
 	function writeLocals(locals: Array<LuauAst.LuauLocal>): string {
@@ -49,7 +62,7 @@ export function write(ast: LuauAst.LuauProgram) {
 		locals.forEach((local) => {
 			let s = ""
 
-			s += (local as LuauAst.LuauVarDef).name + `${(local as LuauAst.LuauVarDef).type != undefined && `: ${writeTypeDef((local as LuauAst.LuauVarDef).type)} ` || ""}`
+			s += (local as LuauAst.LuauVarDef).name + `${(local as LuauAst.LuauVarDef).type != undefined ? `: ${writeTypeDef((local as LuauAst.LuauVarDef).type)} ` : ""}`
 			loc.push(s)
 		})
 
@@ -57,18 +70,18 @@ export function write(ast: LuauAst.LuauProgram) {
 	}
 
 	function writeBinaryExpression(expression: LuauAst.LuauBinaryExpression): string {
-		let left = new Array<LuauAst.LuauExpression>()
-		left.push((expression as LuauAst.LuauBinaryExpression).left)
+		return `${writeExpressions(new Array<LuauAst.LuauExpression>((expression as LuauAst.LuauBinaryExpression).left))
+			} ${(expression as LuauAst.LuauBinaryExpression).op
+			} ${writeExpressions(new Array<LuauAst.LuauExpression>((expression as LuauAst.LuauBinaryExpression).right))
+			}`
+	}
 
-		let right = new Array<LuauAst.LuauExpression>()
-		right.push((expression as LuauAst.LuauBinaryExpression).right)
-		return `${writeExpressions(left)} ${(expression as LuauAst.LuauBinaryExpression).op} ${writeExpressions(right)}`
+	function writeFunctionCallExpression(expression: LuauAst.LuauFunctionCallExpression): string {
+		return `${writeExpressions(new Array<LuauAst.LuauExpression>(expression.callee))}(${writeExpressions(expression.args)})`
 	}
 
 	function writeUnaryExpression(expression: LuauAst.LuauUnaryExpression): string {
-		let expr = new Array<LuauAst.LuauExpression>()
-		expr.push(expression.expression)
-
+		let expr = new Array<LuauAst.LuauExpression>(expression.expression)
 		let op = undefined
 
 		switch (expression.op) {
@@ -89,21 +102,66 @@ export function write(ast: LuauAst.LuauProgram) {
 	}
 
 	function writeAssignment(assignment: LuauAst.LuauAssignment) {
-		return `local ${writeLocals(assignment.locals)} = ${writeExpressions(assignment.expressions)}\n`
+		return `${indent()}local ${writeLocals(assignment.locals)} = ${writeExpressions(assignment.expressions)};\n`
+	}
+
+	function writeIfStatement(ifStmt: LuauAst.LuauIfStatement) {
+		let out = ''
+
+		// write the initial if
+		out += `${indent()}if ${writeExpressions(new Array<LuauAst.LuauExpression>(ifStmt.condition))} then\n`
+		indentLevel++
+		ifStmt.trueBody.forEach((s) => { out += writeStatement(s) })
+		indentLevel--
+
+		// handle else-if chain
+		let current: LuauAst.LuauIfStatement | undefined = ifStmt.elseIf
+		let finalElseBody = ifStmt.elseBody
+		while (current) {
+			out += `${indent()}elseif ${writeExpressions(new Array<LuauAst.LuauExpression>(current.condition))} then\n`
+			indentLevel++
+			current.trueBody.forEach((s) => { out += writeStatement(s) })
+			indentLevel--
+			finalElseBody = current.elseBody
+			current = current.elseIf
+		}
+
+		// write final else block if present
+		if (finalElseBody) {
+			out += `${indent()}else\n`
+			indentLevel++
+			finalElseBody.forEach((s) => { out += writeStatement(s) })
+			indentLevel--
+		}
+
+		out += `${indent()}end\n`
+		return out
+	}
+
+	function writeExpressionStatement(exprStmt: LuauAst.LuauExpressionStatement) {
+		return `${indent()}${writeExpressions(new Array<LuauAst.LuauExpression>(exprStmt.expression))};\n`
+	}
+
+	function writeStatement(statement: LuauAst.LuauStatement) {
+		switch (statement.statementType) {
+			case LuauAst.LuauStatementType.Assignment:
+				return writeAssignment(statement as LuauAst.LuauAssignment)
+				break
+			case LuauAst.LuauStatementType.IfStatement:
+				return writeIfStatement(statement as LuauAst.LuauIfStatement)
+				break
+			case LuauAst.LuauStatementType.ExpressionStatement:
+				return writeExpressionStatement(statement as LuauAst.LuauExpressionStatement)
+				break
+			default:
+				return "-- Unknown Statement"
+				break
+		}
 	}
 
 	while (index < ast.statements.length) {
 		let statement = ast.statements.at(index)
-
-		switch (statement.statementType) {
-			case LuauAst.LuauStatementType.Assignment:
-				source += writeAssignment(statement as LuauAst.LuauAssignment)
-				break
-			default:
-				source += "-- Unknown Statement"
-				break
-		}
-
+		source += writeStatement(statement)
 		index++
 	}
 
@@ -112,7 +170,7 @@ export function write(ast: LuauAst.LuauProgram) {
 
 export function test() {
 	let samples = [
-		"let a = b == c;"
+		"if a { println('b') } else { println('c') }"
 	]
 
 	samples.forEach((source) => {

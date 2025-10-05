@@ -5,6 +5,8 @@ export enum LuauNodeType {
 
 export enum LuauStatementType {
 	Assignment,
+	IfStatement,
+	ExpressionStatement,
 }
 
 export enum LuauExpressionType {
@@ -14,6 +16,7 @@ export enum LuauExpressionType {
 	Identifier,
 	BinaryExpression,
 	UnaryExpression,
+	FunctionCall,
 }
 
 export enum LuauLocalType {
@@ -100,6 +103,17 @@ export class LuauUnaryExpression extends LuauExpression {
 	}
 }
 
+export class LuauFunctionCallExpression extends LuauExpression {
+	callee!: LuauExpression
+	args!: Array<LuauExpression>
+
+	constructor(callee: LuauExpression, args: Array<LuauExpression>) {
+		super(LuauExpressionType.FunctionCall)
+		this.callee = callee
+		this.args = args
+	}
+}
+
 export class LuauUnknownExpression extends LuauExpression {
 	constructor() {
 		super(LuauExpressionType.UnknownExpression)
@@ -155,5 +169,29 @@ export class LuauProgram {
 	constructor(statements: Array<LuauStatement>) {
 		this.kind = "Program"
 		this.statements = statements
+	}
+}
+
+export class LuauIfStatement extends LuauStatement {
+	condition!: LuauExpression
+	trueBody!: Array<LuauStatement>
+	elseIf!: LuauIfStatement | undefined
+	elseBody!: Array<LuauStatement> | undefined
+
+	constructor(condition: LuauExpression, trueBody: Array<LuauStatement>, elseIf: LuauIfStatement | undefined, elseBody: Array<LuauStatement> | undefined) {
+		super(LuauStatementType.IfStatement)
+		this.condition = condition
+		this.trueBody = trueBody
+		this.elseIf = elseIf
+		this.elseBody = elseBody
+	}
+}
+
+export class LuauExpressionStatement extends LuauStatement {
+	expression!: LuauExpression
+
+	constructor(expression: LuauExpression) {
+		super(LuauStatementType.ExpressionStatement)
+		this.expression = expression
 	}
 }
