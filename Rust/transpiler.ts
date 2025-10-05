@@ -18,7 +18,7 @@ export function transpile(program: Parser.Program) {
 		let types = new Array<LuauAst.LuauTypeDef>()
 		typeDef.additionalParams.forEach((param) => types.push(transpileTypeDef(param)))
 
-		return new LuauAst.LuauTypeDef(transpileIdentifierExpression(typeDef.type), types)
+		return new LuauAst.LuauTypeDef(transpileIdentifierExpression(typeDef.type), types, typeDef.tupleReturn.map((f) => transpileTypeDef(f)))
 	}
 
 	function transpileExpression(expression: Parser.Expression) {
@@ -157,6 +157,8 @@ export function transpile(program: Parser.Program) {
 
 		lookupIndex++
 	}
+
+	let exportedFunc = ((stmts) => stmts.map((stmt) => stmt.statementType))(statements)
 
 	return new LuauAst.LuauProgram(statements)
 }

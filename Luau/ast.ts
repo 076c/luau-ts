@@ -129,12 +129,14 @@ export class LuauLocal {
 }
 
 export class LuauTypeDef {
-	type!: LuauIdentifierExpression
+	tupleArguments: Array<LuauTypeDef> | undefined
+	type!: LuauIdentifierExpression | undefined
 	additionalArguments!: Array<LuauTypeDef>
 
-	constructor(type: LuauIdentifierExpression, additionalArguments: Array<LuauTypeDef>) {
+	constructor(type: LuauIdentifierExpression | undefined, additionalArguments: Array<LuauTypeDef>, tupleArguments: Array<LuauTypeDef> | undefined) {
 		this.type = type
 		this.additionalArguments = additionalArguments
+		this.tupleArguments = tupleArguments
 	}
 }
 

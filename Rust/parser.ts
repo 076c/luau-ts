@@ -11,6 +11,7 @@ export enum StatementType {
 	IfStatement,
 	ReturnStatement,
 	ExpressionStatement,
+	FunctionDeclarationStatement,
 }
 
 export enum ExpressionType {
@@ -22,6 +23,7 @@ export enum ExpressionType {
 	Grouping,
 	FunctionCall,
 	UnaryExpression,
+	ArrayExpression,
 }
 
 export enum LocalType {
@@ -58,6 +60,20 @@ export class Local {
 	}
 }
 
+export class FuncDef extends Local {
+	funcName!: string
+	params!: Array<VarDef>
+	returnType: TypeDef | undefined
+
+	constructor(funcName: string, params: Array<VarDef>, returnType: TypeDef | undefined) {
+		super(LocalType.FuncDef)
+
+		this.funcName = funcName
+		this.params = params
+		this.returnType = returnType
+	}
+}
+
 export class Chunk {
 	statements: Array<Statement>
 
@@ -67,10 +83,11 @@ export class Chunk {
 }
 
 export class TypeDef {
-	type!: IdentifierExpression
+	type!: IdentifierExpression | undefined
 	additionalParams!: Array<TypeDef>
+	tupleReturn!: Array<TypeDef> | undefined
 
-	constructor(type: IdentifierExpression, additionalParams: Array<TypeDef>) {
+	constructor(type: IdentifierExpression | undefined, additionalParams: Array<TypeDef>, tupleReturn: Array<TypeDef> | undefined) {
 		this.type = type
 		this.additionalParams = additionalParams
 	}
@@ -162,6 +179,18 @@ export class FunctionCallExpression extends Expression {
 		this.args = args
 	}
 }
+
+export class ArrayExpression extends Expression {
+	elements!: Array<Expression>
+
+	constructor(elements: Array<Expression>) {
+		super(ExpressionType.ArrayExpression)
+		this.elements = elements
+	}
+}
+
+// TODO: impl
+export class DictionaryExpression extends Expression { }
 
 export class UnknownExpression extends Expression {
 	constructor() {
@@ -327,6 +356,17 @@ export function parse(tokens: Array<Token>) {
 				let expr = parseExpression()
 				let closingParens = eatTypeOf(TokenType.ClosingParens)
 				return new GroupingExpression(expr)
+			case TokenType.OpeningBracket:
+				let openingBracket = eatTypeOf(TokenType.OpeningBracket)
+				let elements = []
+
+				while (current().tokenType != TokenType.ClosingBracket) {
+					elements.push(parseExpression())
+				}
+
+				let closingBracket = eatTypeOf(TokenType.ClosingBracket)
+
+				return new ArrayExpression(elements)
 			default:
 				return new UnknownExpression()
 		}
@@ -391,12 +431,12 @@ export function parse(tokens: Array<Token>) {
 	}
 
 	function parseBitAndExpression(): Expression {
-		let left = parseAdditiveExpression()
+		let left = parseBitShiftExpression()
 
 		// single '&' (bitwise) — avoid consuming '&&' (logical and)
 		while (current()?.typeOf() == TokenType.Ampersand && tokens.at(tokenIndex + 1)?.tokenType != TokenType.Ampersand) {
 			let op = eat().token
-			left = new BinaryExpression(left, op, parseAdditiveExpression())
+			left = new BinaryExpression(left, op, parseBitShiftExpression())
 		}
 
 		return left
@@ -421,6 +461,21 @@ export function parse(tokens: Array<Token>) {
 			let op = eat().token
 
 			left = new BinaryExpression(left, op, parseBitXorExpression())
+		}
+
+		return left
+	}
+
+	function parseBitShiftExpression(): Expression {
+		let left = parseAdditiveExpression()
+
+		while (
+			(current().tokenType == TokenType.OpeningAngledBracket && tokens.at(tokenIndex + 1).tokenType == TokenType.OpeningAngledBracket) ||
+			(current().tokenType == TokenType.ClosingAngledBracket && tokens.at(tokenIndex + 1).tokenType == TokenType.ClosingAngledBracket)
+		) {
+			let op = eat().token + eat().token
+
+			left = new BinaryExpression(left, op, parseAdditiveExpression())
 		}
 
 		return left
@@ -473,27 +528,30 @@ export function parse(tokens: Array<Token>) {
 		return parseLogOrExpression()
 	}
 
-	function parseTypesArguments(): Array<TypeDef> {
+	function parseTypesArguments(openingType: TokenType, closingType: TokenType): Array<TypeDef> {
 		let args = new Array<TypeDef>()
 
-		let openingBracket = eatTypeOf(TokenType.OpeningAngledBracket)
-		while (current().tokenType != TokenType.ClosingAngledBracket) {
+		let openingBracket = eatTypeOf(openingType)
+		while (current().tokenType != closingType) {
 			args.push(parseTypeDefinition())
 		}
 
-		let closingBracket = eatTypeOf(TokenType.ClosingAngledBracket)
+		let closingBracket = eatTypeOf(closingType)
 		return args
 	}
 
 	function parseTypeDefinition(): TypeDef {
+		if (current().tokenType == TokenType.OpeningParens) {
+			return new TypeDef(undefined, undefined, parseTypesArguments(TokenType.OpeningParens, TokenType.ClosingParens))
+		}
 		let name = new IdentifierExpression(eatTypeOf(TokenType.Identifier).token)
 		let args = new Array<TypeDef>()
 
 		if (current().tokenType == TokenType.OpeningAngledBracket) {
-			args = parseTypesArguments()
+			args = parseTypesArguments(TokenType.OpeningAngledBracket, TokenType.ClosingAngledBracket)
 		}
 
-		return new TypeDef(name, args)
+		return new TypeDef(name, args, undefined)
 	}
 
 	function parseReAssignment() {

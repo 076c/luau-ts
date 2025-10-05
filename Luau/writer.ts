@@ -53,7 +53,11 @@ export function write(ast: LuauAst.LuauProgram) {
 		typeDef.additionalArguments.forEach((type) => args += writeTypeDef(type))
 		args += ">"
 
-		return `${writeExpressions(new Array<LuauAst.LuauExpression>(typeDef.type))}${args != "<>" ? args : ""}`
+		if (typeDef.type != undefined) {
+			return `${writeExpressions(new Array<LuauAst.LuauExpression>(typeDef.type))}${args != "<>" ? args : ""}`
+		} else {
+			return `(${typeDef.tupleArguments.map((f) => writeTypeDef(f)).join(", ")})`
+		}
 	}
 
 	function writeLocals(locals: Array<LuauAst.LuauLocal>): string {
@@ -170,7 +174,15 @@ export function write(ast: LuauAst.LuauProgram) {
 
 export function test() {
 	let samples = [
-		"if a { println('b') } else { println('c') }"
+		`
+		let func = print;
+
+		if func == print {
+			func!("Hello world!");
+		} else {
+			func!("{}", 1 | 2 ^ 3 & (4 + 5))	
+		}
+		`
 	]
 
 	samples.forEach((source) => {
