@@ -23,6 +23,10 @@ export function transpile(program: Parser.Program) {
 
 	function transpileExpression(expression: Parser.Expression) {
 		switch (expression.expressionType) {
+			case Parser.ExpressionType.Grouping:
+				// unwrap grouping and transpile inner expression
+				return transpileExpression((expression as any).expression)
+
 			case Parser.ExpressionType.Identifier:
 				return new LuauAst.LuauIdentifierExpression((expression as Parser.IdentifierExpression).name)
 			case Parser.ExpressionType.String:

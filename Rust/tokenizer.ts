@@ -24,6 +24,7 @@ export enum TokenType {
 	Modulo, // %
 	OpeningCurlyBracket, // {
 	ClosingCurlyBracket, // }
+	Sqrt, // ^
 }
 
 export const Keywords = ["let", "mut", "fn", "struct", "impl", "for", "where", "if", "else"]
@@ -230,6 +231,9 @@ export function tokenize(source: string): Array<Token> {
 					break
 				case '}':
 					type = TokenType.ClosingCurlyBracket
+					break
+				case '^':
+					type = TokenType.Sqrt
 					break
 				default:
 					type = TokenType.Unknown

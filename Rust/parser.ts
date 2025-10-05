@@ -18,6 +18,7 @@ export enum ExpressionType {
 	String,
 	Identifier,
 	BinaryExpression,
+	Grouping,
 	UnaryExpression,
 }
 
@@ -140,6 +141,16 @@ export class UnaryExpression extends Expression {
 	}
 }
 
+export class GroupingExpression extends Expression {
+	expression!: Expression
+
+	constructor(expression: Expression) {
+		super(ExpressionType.Grouping)
+		this.expression = expression
+	}
+
+}
+
 export class UnknownExpression extends Expression {
 	constructor() {
 		super(ExpressionType.Unknown)
@@ -194,6 +205,37 @@ export class Program {
 		this.statements = statements
 	}
 }
+
+// ORDER OF PRECEDENCE
+// 1: CLOSURES
+// 2: BREAK
+// 3: RETURN
+// 4: COMPOUND AND, XOR, OR
+// 5: COMPUND SHL, SHR
+// 6: DIRECT ASSIGNMENT
+// 7: RANGE, COMPUND RANGE
+// 8: LOGAND
+// 9: LOGOR
+// 10: LE, LEQ, GE, GEQ
+// 11: EQ, NEQ
+// 12: BITOR
+// 13: BITXOR
+// 14: BITAND
+// 15: BITSHR, BITSHL
+// 16: ADD, SUB
+// 17: MUL, DIV, MOD
+// 18: COL
+// 19: TYPECASE 'as'
+// 20: MUTABLE BORROW &mut
+// 21: SHARED BORROW &
+// 22: DEREFERENCE *
+// 23: BITNOT
+// 24: NEG (UNARY -)
+// 25: QMARK OP
+// 26: FUNCTION CALLS, ARRAY INDEX
+// 27: FIELD EXPRESSIONS
+// 28: METHOD CALLS
+// 29: PATH
 
 export function parse(tokens: Array<Token>) {
 	let statements: Array<Statement> = []
@@ -252,7 +294,7 @@ export function parse(tokens: Array<Token>) {
 				let openingParens = eatTypeOf(TokenType.OpeningParens)
 				let expr = parseExpression()
 				let closingParens = eatTypeOf(TokenType.ClosingParens)
-				return expr
+				return new GroupingExpression(expr)
 			default:
 				return new UnknownExpression()
 		}
@@ -261,11 +303,11 @@ export function parse(tokens: Array<Token>) {
 	function parseUnaryExpression(): Expression {
 		// treat prefix operators as unary (e.g. -x, &x, *x, +x, !x)
 		if (
-			current().typeOf() == TokenType.Sub ||
-			current().typeOf() == TokenType.Ampersand ||
-			current().typeOf() == TokenType.Mul ||
-			current().typeOf() == TokenType.Add ||
-			current().typeOf() == TokenType.Exclamation
+			current()?.typeOf() == TokenType.Sub ||
+			current()?.typeOf() == TokenType.Ampersand ||
+			current()?.typeOf() == TokenType.Mul ||
+			current()?.typeOf() == TokenType.Add ||
+			current()?.typeOf() == TokenType.Exclamation
 		) {
 			let opToken = eat()
 			let op = opToken?.token
@@ -280,9 +322,9 @@ export function parse(tokens: Array<Token>) {
 		let left = parseUnaryExpression()
 
 		while (
-			current().typeOf() == TokenType.Mul ||
-			current().typeOf() == TokenType.Slash ||
-			current().typeOf() == TokenType.Modulo
+			current()?.typeOf() == TokenType.Mul ||
+			current()?.typeOf() == TokenType.Slash ||
+			current()?.typeOf() == TokenType.Modulo
 		) {
 			let op = eat().token
 
@@ -295,7 +337,7 @@ export function parse(tokens: Array<Token>) {
 	function parseAdditiveExpression(): Expression {
 		let left = parseMultiplicativeExpression()
 
-		while (current().typeOf() == TokenType.Add || current().typeOf() == TokenType.Sub) {
+		while (current()?.typeOf() == TokenType.Add || current()?.typeOf() == TokenType.Sub) {
 			let op = eat().token
 
 			left = new BinaryExpression(left, op, parseMultiplicativeExpression())
@@ -304,8 +346,80 @@ export function parse(tokens: Array<Token>) {
 		return left
 	}
 
+	function parseLogAndExpression(): Expression {
+		let left = parseEqualComparisonExpression()
+
+		while (current().typeOf() == TokenType.Ampersand && tokens.at(tokenIndex).tokenType == TokenType.Ampersand) {
+			let op = eat().token + eat().token // & & & -> &&
+
+			left = new BinaryExpression(left, op, parseEqualComparisonExpression())
+		}
+
+		return left
+	}
+
+	function parseBitAndExpression(): Expression {
+		let left = parseAdditiveExpression()
+
+		while (current().typeOf() == TokenType.Add || current().typeOf() == TokenType.Sub) {
+			let op = eat().token
+
+			left = new BinaryExpression(left, op, parseAdditiveExpression())
+		}
+
+		return left
+	}
+
+	function parseBitXorExpression(): Expression {
+		let left = parseBitAndExpression()
+
+		while (current().typeOf() == TokenType.Sqrt) {
+			let op = eat().token
+
+			left = new BinaryExpression(left, op, parseBitAndExpression())
+		}
+
+		return left
+	}
+
+	function parseBitOrExpression(): Expression {
+		let left = parseBitXorExpression()
+
+		while (current().typeOf() == TokenType.Pipe && tokens.at(tokenIndex + 1).tokenType != TokenType.Pipe) {
+			let op = eat().token
+
+			left = new BinaryExpression(left, op, parseBitXorExpression())
+		}
+
+		return left
+	}
+
+	function parseEqualComparisonExpression(): Expression {
+		let left = parseBitOrExpression()
+
+		while (current().typeOf() == TokenType.Equal && (tokens.at(tokenIndex).tokenType == TokenType.Equal || tokens.at(tokenIndex).tokenType == TokenType.Exclamation)) {
+			let op = eat().token + eat().token // = & = -> ==
+
+			left = new BinaryExpression(left, op, parseBitOrExpression())
+		}
+
+		return left
+	}
+
+	function parseLogOrExpression(): Expression {
+		let left = parseLogAndExpression()
+
+		while (current().typeOf() == TokenType.Pipe && tokens.at(tokenIndex).tokenType == TokenType.Pipe) {
+			let op = eat().token + eat().token // | & | -> ||
+
+			left = new BinaryExpression(left, op, parseLogAndExpression())
+		}
+
+		return left
+	}
+
 	function parseExpression(): Expression {
-		return parseAdditiveExpression()
+		return parseLogOrExpression()
 	}
 
 	function parseTypesArguments(): Array<TypeDef> {

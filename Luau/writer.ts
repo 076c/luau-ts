@@ -112,7 +112,7 @@ export function write(ast: LuauAst.LuauProgram) {
 
 export function test() {
 	let samples = [
-		"let a = *b;"
+		"let a = b == c;"
 	]
 
 	samples.forEach((source) => {
