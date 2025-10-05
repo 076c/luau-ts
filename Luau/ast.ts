@@ -1,5 +1,3 @@
-import { Expression, ExpressionType } from "../Rust/parser"
-
 export enum LuauNodeType {
 	Statement,
 	Expression
@@ -55,6 +53,50 @@ export class LuauIdentifierExpression extends LuauExpression {
 	constructor(name: string) {
 		super(LuauExpressionType.Identifier)
 		this.name = name
+	}
+}
+
+export class LuauStringExpression extends LuauExpression {
+	string!: string
+
+	constructor(string: string) {
+		super(LuauExpressionType.String)
+		this.string = string
+	}
+}
+
+export class LuauNumberExpression extends LuauExpression {
+	number!: string
+
+	constructor(number: string) {
+		super(LuauExpressionType.Number)
+		this.number = number
+	}
+}
+
+export class LuauBinaryExpression extends LuauExpression {
+	left!: LuauExpression
+	op!: string
+	right!: LuauExpression
+
+	constructor(left: LuauExpression, op: string, right: LuauExpression) {
+		super(LuauExpressionType.BinaryExpression)
+
+		this.left = left
+		this.op = op
+		this.right = right
+	}
+}
+
+export class LuauUnaryExpression extends LuauExpression {
+	op!: string
+	expression!: LuauExpression
+
+	constructor(op: string, expression: LuauExpression) {
+		super(LuauExpressionType.UnaryExpression)
+
+		this.op = op
+		this.expression = expression
 	}
 }
 

@@ -22,9 +22,11 @@ export enum TokenType {
 	Sub, // -
 	Mul, // *
 	Modulo, // %
+	OpeningCurlyBracket, // {
+	ClosingCurlyBracket, // }
 }
 
-export const Keywords = ["let", "mut", "fn", "struct", "impl", "for", "where"]
+export const Keywords = ["let", "mut", "fn", "struct", "impl", "for", "where", "if", "else"]
 
 export class LocRange {
 	line!: number
@@ -52,7 +54,7 @@ export class Token {
 	}
 
 	value() {
-		return this.value
+		return this.token
 	}
 
 	toString() {
@@ -81,12 +83,12 @@ export function tokenize(source: string): Array<Token> {
 	}
 
 	function isAlnum(c: string): boolean {
-		return /^[a-z0-9]+$/i.test(c)
+		return /^[a-z0-9]$/i.test(c)
 	}
 
 	// TODO: remove this
 	function isNumber(c: string): boolean {
-		return /^[0-9]+$/i.test(c)
+		return /^[0-9]$/i.test(c)
 	}
 
 	function isSpace(c: string): boolean {
@@ -105,6 +107,18 @@ export function tokenize(source: string): Array<Token> {
 		}
 
 		return identifier
+	}
+
+	function readString(): string {
+		let quote = readChar() // consume opening quote
+		let s = ""
+		while (position < source.length && peekChar() != quote) {
+			// TODO: handle escapes
+			s += readChar()
+		}
+		// consume closing quote if present
+		if (peekChar() == quote) readChar()
+		return s
 	}
 
 	function readNumber(): string {
@@ -127,7 +141,14 @@ export function tokenize(source: string): Array<Token> {
 	}
 
 	while (position < source.length) {
-		if (isAlnum(peekChar())) {
+		// prefer numbers first so digits are not treated as identifiers
+		if (isNumber(peekChar())) {
+			let number = readNumber()
+			let loc = new LocRange(line, position - number.length, position)
+			let token = new Token(TokenType.Number, number, loc)
+
+			tokens.push(token)
+		} else if (isAlnum(peekChar())) {
 			let identifier = readIdentifier()
 			let loc = new LocRange(line, position - identifier.length, position)
 			let type = TokenType.Identifier
@@ -135,17 +156,42 @@ export function tokenize(source: string): Array<Token> {
 			let token = new Token(type, identifier, loc)
 
 			tokens.push(token)
-		} else if (isNumber(peekChar())) {
-			let number = readNumber()
-			let loc = new LocRange(line, position - number.length, position)
-			let token = new Token(TokenType.Number, number, loc)
-
-			tokens.push(token)
 		} else if (isSpace(peekChar())) {
 			readChar()
 		} else {
 			let type = TokenType.Unknown
 			switch (peekChar()) {
+				case '"':
+					let str = readString()
+					let locStr = new LocRange(line, position - str.length - 2, position)
+					tokens.push(new Token(TokenType.String, str, locStr))
+					continue
+				case '\'':
+					let s2 = readString()
+					let locStr2 = new LocRange(line, position - s2.length - 2, position)
+					tokens.push(new Token(TokenType.String, s2, locStr2))
+					continue
+				case '+':
+					type = TokenType.Add
+					break
+				case '-':
+					type = TokenType.Sub
+					break
+				case '*':
+					type = TokenType.Mul
+					break
+				case '/':
+					type = TokenType.Slash
+					break
+				case '%':
+					type = TokenType.Modulo
+					break
+				case '|':
+					type = TokenType.Pipe
+					break
+				case '\\':
+					type = TokenType.Backslash
+					break
 				case '!':
 					type = TokenType.Exclamation
 					break
@@ -178,6 +224,12 @@ export function tokenize(source: string): Array<Token> {
 					break
 				case '&':
 					type = TokenType.Ampersand
+					break
+				case '{':
+					type = TokenType.OpeningCurlyBracket
+					break
+				case '}':
+					type = TokenType.ClosingCurlyBracket
 					break
 				default:
 					type = TokenType.Unknown

@@ -3,5 +3,6 @@ Luau/writer.js
 Rust/parser.js
 Rust/tokenizer.js
 Rust/transpiler.js
+Rust/type_map.js
 main.js
 .git

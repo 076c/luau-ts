@@ -1,10 +1,14 @@
 import * as Parser from './parser.js'
 import * as LuauAst from './../Luau/ast.js'
-import { tokenize } from './tokenizer.js'
+import * as Tokenizer from './tokenizer.js'
 
 export function transpile(program: Parser.Program) {
 	let index = 0
 	let statements: Array<LuauAst.LuauStatement> = []
+
+	function transpilerError(error: string, loc: Tokenizer.LocRange | undefined) {
+		throw console.error(`transpiler: ${error}${loc !== undefined && ` line: ${loc.line} column ${loc.startingColumn}-${loc.endingColumn}` || ""}`)
+	}
 
 	function transpileIdentifierExpression(identifierExpression: Parser.IdentifierExpression): LuauAst.LuauIdentifierExpression {
 		return new LuauAst.LuauIdentifierExpression(identifierExpression.name)
@@ -21,6 +25,14 @@ export function transpile(program: Parser.Program) {
 		switch (expression.expressionType) {
 			case Parser.ExpressionType.Identifier:
 				return new LuauAst.LuauIdentifierExpression((expression as Parser.IdentifierExpression).name)
+			case Parser.ExpressionType.String:
+				return new LuauAst.LuauStringExpression((expression as Parser.StringExpression).string)
+			case Parser.ExpressionType.Number:
+				return new LuauAst.LuauNumberExpression((expression as Parser.NumberExpression).number)
+			case Parser.ExpressionType.BinaryExpression:
+				return new LuauAst.LuauBinaryExpression(transpileExpression((expression as Parser.BinaryExpression).left), (expression as Parser.BinaryExpression).op, transpileExpression((expression as Parser.BinaryExpression).right))
+			case Parser.ExpressionType.UnaryExpression:
+				return new LuauAst.LuauUnaryExpression((expression as Parser.UnaryExpression).op, transpileExpression((expression as Parser.UnaryExpression).expression))
 			default:
 				return new LuauAst.LuauUnknownExpression()
 		}
@@ -56,18 +68,37 @@ export function transpile(program: Parser.Program) {
 		index++
 	}
 
+	// Luau transpiler checkup
+	let lookupIndex = 0
+	while (lookupIndex < statements.length) {
+		let stmt = statements.at(lookupIndex)
+
+		function validateExpression(expression: LuauAst.LuauExpression): boolean {
+			if (expression.expressionType == LuauAst.LuauExpressionType.UnaryExpression) {
+				if ((expression as LuauAst.LuauUnaryExpression).op == '&' || ((expression as LuauAst.LuauUnaryExpression).op == '*')) {
+					throw transpilerError("cannot reference or dereference values (gc handles it)", undefined)
+				}
+			}
+			return true
+		}
+
+		if (stmt.statementType == LuauAst.LuauStatementType.Assignment) {
+			(stmt as LuauAst.LuauAssignment).expressions.forEach(validateExpression)
+		}
+
+		lookupIndex++
+	}
+
 	return new LuauAst.LuauProgram(statements)
 }
 
 export function test() {
 	let samples = [
-		"let a = b;",
-		"let a = c;",
-		"let a = d;"
+		"let a = *b;"
 	]
 
 	samples.forEach((source) => {
-		let tokens = tokenize(source)
+		let tokens = Tokenizer.tokenize(source)
 		let parsed = Parser.parse(tokens)
 
 		let transpiled = transpile(parsed)
