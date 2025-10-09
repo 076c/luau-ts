@@ -24,6 +24,7 @@ export enum ExpressionType {
 	FunctionCall,
 	UnaryExpression,
 	ArrayExpression,
+	MatchExpression,
 }
 
 export enum LocalType {
@@ -189,6 +190,27 @@ export class ArrayExpression extends Expression {
 	}
 }
 
+export class MatchCase {
+	comparator!: Expression
+	body!: Chunk
+
+	constructor(comparator: Expression, body: Chunk) {
+		this.comparator = comparator
+		this.body = body
+	}
+}
+
+export class MatchExpression extends Expression {
+	comparator!: Expression
+	cases!: Array<MatchCase>
+
+	constructor(comparator: Expression, cases: Array<MatchCase>) {
+		super(ExpressionType.MatchExpression)
+		this.comparator = comparator
+		this.cases = cases
+	}
+}
+
 // TODO: impl
 export class DictionaryExpression extends Expression { }
 
@@ -274,7 +296,7 @@ export class Program {
 // 4: COMPOUND AND, XOR, OR
 // 5: COMPUND SHL, SHR
 // 6: DIRECT ASSIGNMENT
-// 7: RANGE, COMPUND RANGE
+// 7: RANGE, COMPOUND RANGE
 // 8: LOGAND
 // 9: LOGOR
 // 10: LE, LEQ, GE, GEQ
@@ -358,15 +380,21 @@ export function parse(tokens: Array<Token>) {
 				return new GroupingExpression(expr)
 			case TokenType.OpeningBracket:
 				let openingBracket = eatTypeOf(TokenType.OpeningBracket)
-				let elements = []
+				let elements: Array<Expression> = []
 
-				while (current().tokenType != TokenType.ClosingBracket) {
+				while (current() && current()?.tokenType != TokenType.ClosingBracket) {
+					let before = tokenIndex
 					elements.push(parseExpression())
+					if (tokenIndex === before) parserError("unable to parse array element", current()?.loc)
 				}
 
 				let closingBracket = eatTypeOf(TokenType.ClosingBracket)
 
 				return new ArrayExpression(elements)
+			case TokenType.Keyword:
+				if (current()?.token == "match") {
+					return parseMatchExpression()
+				}
 			default:
 				return new UnknownExpression()
 		}
@@ -418,13 +446,26 @@ export function parse(tokens: Array<Token>) {
 		return left
 	}
 
-	function parseLogAndExpression(): Expression {
-		let left = parseEqualComparisonExpression()
+	function parseRangeExpression(): Expression {
+		let left = parseLogAndExpression()
+		while (current()?.tokenType == TokenType.Dot) {
+			let dot = eat()
+			let right = parseAdditiveExpression()
+			left = new BinaryExpression(left, "..", right)
+		}
 
-		while (current().typeOf() == TokenType.Ampersand && tokens.at(tokenIndex + 1).tokenType == TokenType.Ampersand) {
+		return left
+	}
+
+	function parseLogAndExpression(): Expression {
+		let left = parseLogOrExpression()
+
+		while (current()?.typeOf() == TokenType.Ampersand && tokens.at(tokenIndex + 1)?.tokenType == TokenType.Ampersand) {
+			let before = tokenIndex
 			let op = eat().token + eat().token // & & -> &&
 
-			left = new BinaryExpression(left, op, parseEqualComparisonExpression())
+			left = new BinaryExpression(left, op, parseLogOrExpression())
+			if (tokenIndex === before) parserError('parser did not advance while parsing logical AND', current()?.loc)
 		}
 
 		return left
@@ -445,10 +486,12 @@ export function parse(tokens: Array<Token>) {
 	function parseBitXorExpression(): Expression {
 		let left = parseBitAndExpression()
 
-		while (current().typeOf() == TokenType.Sqrt) {
+		while (current()?.typeOf() == TokenType.Sqrt) {
+			let before = tokenIndex
 			let op = eat().token
 
 			left = new BinaryExpression(left, op, parseBitAndExpression())
+			if (tokenIndex === before) parserError('parser did not advance while parsing bitwise XOR', current()?.loc)
 		}
 
 		return left
@@ -457,10 +500,12 @@ export function parse(tokens: Array<Token>) {
 	function parseBitOrExpression(): Expression {
 		let left = parseBitXorExpression()
 
-		while (current().typeOf() == TokenType.Pipe && tokens.at(tokenIndex + 1).tokenType != TokenType.Pipe) {
+		while (current()?.typeOf() == TokenType.Pipe && tokens.at(tokenIndex + 1)?.tokenType != TokenType.Pipe) {
+			let before = tokenIndex
 			let op = eat().token
 
 			left = new BinaryExpression(left, op, parseBitXorExpression())
+			if (tokenIndex === before) parserError('parser did not advance while parsing bitwise OR', current()?.loc)
 		}
 
 		return left
@@ -470,12 +515,14 @@ export function parse(tokens: Array<Token>) {
 		let left = parseAdditiveExpression()
 
 		while (
-			(current().tokenType == TokenType.OpeningAngledBracket && tokens.at(tokenIndex + 1).tokenType == TokenType.OpeningAngledBracket) ||
-			(current().tokenType == TokenType.ClosingAngledBracket && tokens.at(tokenIndex + 1).tokenType == TokenType.ClosingAngledBracket)
+			(current()?.tokenType == TokenType.OpeningAngledBracket && tokens.at(tokenIndex + 1)?.tokenType == TokenType.OpeningAngledBracket) ||
+			(current()?.tokenType == TokenType.ClosingAngledBracket && tokens.at(tokenIndex + 1)?.tokenType == TokenType.ClosingAngledBracket)
 		) {
+			let before = tokenIndex
 			let op = eat().token + eat().token
 
 			left = new BinaryExpression(left, op, parseAdditiveExpression())
+			if (tokenIndex === before) parserError('parser did not advance while parsing bit shift', current()?.loc)
 		}
 
 		return left
@@ -484,40 +531,80 @@ export function parse(tokens: Array<Token>) {
 	function parseEqualComparisonExpression(): Expression {
 		let left = parseBitOrExpression()
 
-		while (current().typeOf() == TokenType.Equal && (tokens.at(tokenIndex + 1).tokenType == TokenType.Equal || tokens.at(tokenIndex + 1).tokenType == TokenType.Exclamation)) {
+		while (current()?.typeOf() == TokenType.Equal && (tokens.at(tokenIndex + 1)?.tokenType == TokenType.Equal || tokens.at(tokenIndex + 1)?.tokenType == TokenType.Exclamation)) {
+			let before = tokenIndex
 			let op = eat().token + eat().token // = = -> ==
 
 			left = new BinaryExpression(left, op, parseBitOrExpression())
+			if (tokenIndex === before) parserError('parser did not advance while parsing equality comparison', current()?.loc)
 		}
 
 		return left
 	}
 
 	function parseLogOrExpression(): Expression {
-		let left = parseLogAndExpression()
+		let left = parseEqualComparisonExpression()
 
-		while (current().typeOf() == TokenType.Pipe && tokens.at(tokenIndex + 1).tokenType == TokenType.Pipe) {
+		while (current()?.typeOf() == TokenType.Pipe && tokens.at(tokenIndex + 1)?.tokenType == TokenType.Pipe) {
+			let before = tokenIndex
 			let op = eat().token + eat().token // | | -> ||
 
-			left = new BinaryExpression(left, op, parseLogAndExpression())
+			left = new BinaryExpression(left, op, parseEqualComparisonExpression())
+			if (tokenIndex === before) parserError('parser did not advance while parsing logical OR', current()?.loc)
 		}
 
 		return left
 	}
 
-	function parseFunctionCall(): Expression {
-		let expr = parsePrimaryExpression()
-		let isMacro = current().tokenType == TokenType.Exclamation ? eat() && true : false
+	function parseMatchExpression(): Expression {
+		if (current()?.tokenType == TokenType.Keyword && current()?.token == "match") {
+			let kword = eatTypeOf(TokenType.Keyword) // match
+			let comparator = parseExpression()
+			let cases: Array<MatchCase> = []
+			let openingBracket = eatTypeOf(TokenType.OpeningCurlyBracket)
 
-		while (current().tokenType == TokenType.OpeningParens) {
-			let openingParen = eat()
-			let args = []
+			while (current()?.tokenType == TokenType.Identifier) {
+				let comparator = parseExpression()
+				let fat_arrow = eatTypeOf(TokenType.Equal).token + eatTypeOf(TokenType.ClosingAngledBracket).token
+				let body = null
 
-			while (current().tokenType != TokenType.ClosingParens) {
-				args.push(parsePrimaryExpression())
+				if (current().tokenType == TokenType.OpeningCurlyBracket) {
+					body = parseChunk()
+				} else {
+					body = new Chunk([parseStatement()])
+					if (current()?.tokenType != TokenType.Comma) {
+						break
+					} else {
+						let comma = eatTypeOf(TokenType.Comma)
+					}
+				}
+
+				cases.push(new MatchCase(comparator, body))
 			}
 
-			let closingParen = eat()
+			let closingBracket = eatTypeOf(TokenType.ClosingCurlyBracket)
+
+			return new MatchExpression(comparator, cases)
+		} else {
+			return parseRangeExpression()
+		}
+	}
+
+	function parseFunctionCall(): Expression {
+		let expr = parsePrimaryExpression()
+		let isMacro = current()?.tokenType == TokenType.Exclamation ? (eat() && true) : false
+
+		while (current() && current()?.tokenType == TokenType.OpeningParens) {
+			let openingParen = eatTypeOf(TokenType.OpeningParens)
+			let args: Array<Expression> = []
+
+			while (current() && current().tokenType != TokenType.ClosingParens) {
+				let before = tokenIndex
+				args.push(parseExpression())
+				if (tokenIndex === before) parserError('unable to parse function call argument', current()?.loc)
+			}
+
+			let closingParen = eatTypeOf(TokenType.ClosingParens)
 			expr = new FunctionCallExpression(expr, args)
 		}
 
@@ -525,15 +612,17 @@ export function parse(tokens: Array<Token>) {
 	}
 
 	function parseExpression(): Expression {
-		return parseLogOrExpression()
+		return parseRangeExpression()
 	}
 
 	function parseTypesArguments(openingType: TokenType, closingType: TokenType): Array<TypeDef> {
 		let args = new Array<TypeDef>()
 
 		let openingBracket = eatTypeOf(openingType)
-		while (current().tokenType != closingType) {
+		while (current() && current()?.tokenType != closingType) {
+			let before = tokenIndex
 			args.push(parseTypeDefinition())
+			if (tokenIndex === before) parserError('unable to parse type argument', current()?.loc)
 		}
 
 		let closingBracket = eatTypeOf(closingType)
@@ -568,8 +657,12 @@ export function parse(tokens: Array<Token>) {
 		let openingBracket = eatTypeOf(TokenType.OpeningCurlyBracket)
 		let statements: Array<Statement> = []
 
-		while (current().tokenType != TokenType.ClosingCurlyBracket) {
-			statements.push(parseStatement())
+		while (current() && current()?.tokenType != TokenType.ClosingCurlyBracket) {
+			let before = tokenIndex
+			let st = parseStatement()
+			if (st === undefined) parserError('unable to parse statement in chunk', current()?.loc)
+			statements.push(st)
+			if (tokenIndex === before) parserError('parser did not advance while parsing chunk', current()?.loc)
 		}
 
 		let closingBracket = eatTypeOf(TokenType.ClosingCurlyBracket)
@@ -647,7 +740,12 @@ export function parse(tokens: Array<Token>) {
 	}
 
 	while (tokenIndex < tokens.length) {
+		if (tokens.at(tokenIndex) && tokens.at(tokenIndex)?.tokenType == TokenType.Eof) {
+			break
+		}
+		let before = tokenIndex
 		statements.push(parseStatement())
+		if (tokenIndex === before) parserError('parser did not advance while parsing top-level statements', current()?.loc)
 	}
 
 	return new Program(statements)

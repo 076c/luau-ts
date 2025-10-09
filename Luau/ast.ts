@@ -7,16 +7,19 @@ export enum LuauStatementType {
 	Assignment,
 	IfStatement,
 	ExpressionStatement,
+	ReturnStatement,
 }
 
 export enum LuauExpressionType {
 	UnknownExpression,
 	Number,
+	Nil,
 	String,
 	Identifier,
 	BinaryExpression,
 	UnaryExpression,
 	FunctionCall,
+	ClosureExpression,
 }
 
 export enum LuauLocalType {
@@ -65,6 +68,21 @@ export class LuauStringExpression extends LuauExpression {
 	constructor(string: string) {
 		super(LuauExpressionType.String)
 		this.string = string
+	}
+}
+
+export class LuauNilExpression extends LuauExpression {
+	constructor() { super(LuauExpressionType.Nil) }
+}
+
+export class LuauClosureExpression extends LuauExpression {
+	chunk!: Array<LuauStatement>
+	params!: Array<LuauVarDef>
+
+	constructor(chunk: Array<LuauStatement>, params: Array<LuauVarDef>) {
+		super(LuauExpressionType.ClosureExpression)
+		this.chunk = chunk
+		this.params = params
 	}
 }
 
@@ -161,6 +179,15 @@ export class LuauAssignment extends LuauStatement {
 
 		this.locals = locals
 		this.expressions = expressions
+	}
+}
+
+export class LuauReturnStatement extends LuauStatement {
+	values: Array<LuauExpression>
+
+	constructor(values: Array<LuauExpression>) {
+		super(LuauStatementType.ReturnStatement)
+		this.values = values
 	}
 }
 

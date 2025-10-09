@@ -25,12 +25,15 @@ export enum TokenType {
 	OpeningCurlyBracket, // {
 	ClosingCurlyBracket, // }
 	Sqrt, // ^
-	Dot, // .
-	Comma, // ,
-	Eof,
 }
 
-export const Keywords = ["let", "mut", "fn", "struct", "impl", "for", "where", "if", "else", "match"]
+// TODO: not all keywords are listed
+export const Keywords = ["const", "void", "static", "char", "int", "double", "class", "private", "public",
+	"for", "do", "while", "break", "new", "delete", "struct", "enum", "union",
+	"short", "long", "float", "false", "true", "extern", "try", "catch", "using",
+	"inline", "case", "catch", "bool", "and", "switch", "reinterpret_cast", "throw",
+	"typedef", "continue", "protected", "namespace", "if", "else", "return", "signed",
+	"virtual", "wchar_t", "unsigned"]
 
 export class LocRange {
 	line!: number
@@ -238,12 +241,6 @@ export function tokenize(source: string): Array<Token> {
 				case '^':
 					type = TokenType.Sqrt
 					break
-				case '.':
-					type = TokenType.Dot
-					break
-				case ',':
-					type = TokenType.Comma
-					break
 				default:
 					type = TokenType.Unknown
 					break
@@ -253,8 +250,6 @@ export function tokenize(source: string): Array<Token> {
 			tokens.push(token)
 		}
 	}
-
-	tokens.push(new Token(TokenType.Eof, "", new LocRange(line, position, position)));
 
 	return tokens
 }

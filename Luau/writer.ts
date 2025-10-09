@@ -39,6 +39,15 @@ export function write(ast: LuauAst.LuauProgram) {
 				case LuauAst.LuauExpressionType.FunctionCall:
 					written.push(writeFunctionCallExpression(expression as LuauAst.LuauFunctionCallExpression))
 					break
+				case LuauAst.LuauExpressionType.ClosureExpression:
+					let closure = expression as LuauAst.LuauClosureExpression
+					let closureStr = `function(${writeLocals(closure.params)})\n`
+					indentLevel++
+					closure.chunk.forEach((stmt) => closureStr += writeStatement(stmt))
+					indentLevel--
+					closureStr += `${indent()}end`
+					written.push(closureStr)
+					break
 				default:
 					written.push("--[[ UNKNOWN EXPRESSION ]]")
 					break
@@ -81,7 +90,11 @@ export function write(ast: LuauAst.LuauProgram) {
 	}
 
 	function writeFunctionCallExpression(expression: LuauAst.LuauFunctionCallExpression): string {
-		return `${writeExpressions(new Array<LuauAst.LuauExpression>(expression.callee))}(${writeExpressions(expression.args)})`
+		if (expression.callee.expressionType != LuauAst.LuauExpressionType.Identifier) {
+			return `(${writeExpressions(new Array<LuauAst.LuauExpression>(expression.callee))})(${writeExpressions(expression.args)})`
+		} else {
+			return `${writeExpressions(new Array<LuauAst.LuauExpression>(expression.callee))}(${writeExpressions(expression.args)})`
+		}
 	}
 
 	function writeUnaryExpression(expression: LuauAst.LuauUnaryExpression): string {
@@ -146,6 +159,10 @@ export function write(ast: LuauAst.LuauProgram) {
 		return `${indent()}${writeExpressions(new Array<LuauAst.LuauExpression>(exprStmt.expression))};\n`
 	}
 
+	function writeReturnStatement(values) {
+		return `${indent()}return ${writeExpressions(values)}\n`
+	}
+
 	function writeStatement(statement: LuauAst.LuauStatement) {
 		switch (statement.statementType) {
 			case LuauAst.LuauStatementType.Assignment:
@@ -156,6 +173,9 @@ export function write(ast: LuauAst.LuauProgram) {
 				break
 			case LuauAst.LuauStatementType.ExpressionStatement:
 				return writeExpressionStatement(statement as LuauAst.LuauExpressionStatement)
+				break
+			case LuauAst.LuauStatementType.ReturnStatement:
+				return writeReturnStatement((statement as LuauAst.LuauReturnStatement).values)
 				break
 			default:
 				return "-- Unknown Statement"

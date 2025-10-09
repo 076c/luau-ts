@@ -39,6 +39,7 @@ export function transpile(program: Parser.Program) {
 					let left = transpileExpression(bin.left)
 					let right = transpileExpression(bin.right)
 					// convert bitwise ops to bit32.* calls
+					// TODO: format range expresions properly
 					switch (bin.op) {
 						case '&':
 							return new LuauAst.LuauFunctionCallExpression(new LuauAst.LuauIdentifierExpression('bit32.band'), [left, right])
@@ -46,6 +47,12 @@ export function transpile(program: Parser.Program) {
 							return new LuauAst.LuauFunctionCallExpression(new LuauAst.LuauIdentifierExpression('bit32.bor'), [left, right])
 						case '^':
 							return new LuauAst.LuauFunctionCallExpression(new LuauAst.LuauIdentifierExpression('bit32.bxor'), [left, right])
+						case '>>':
+							return new LuauAst.LuauFunctionCallExpression(new LuauAst.LuauIdentifierExpression('bit32.rshift'), [left, right])
+						case '<<':
+							return new LuauAst.LuauFunctionCallExpression(new LuauAst.LuauIdentifierExpression('bit32.lshift'), [left, right])
+						case '..':
+							return new LuauAst.LuauFunctionCallExpression(new LuauAst.LuauIdentifierExpression('Range.new'), [left, right])
 						default:
 							return new LuauAst.LuauBinaryExpression(left, bin.op, right)
 					}
@@ -54,6 +61,50 @@ export function transpile(program: Parser.Program) {
 				return new LuauAst.LuauUnaryExpression((expression as Parser.UnaryExpression).op, transpileExpression((expression as Parser.UnaryExpression).expression))
 			case Parser.ExpressionType.FunctionCall:
 				return new LuauAst.LuauFunctionCallExpression(transpileExpression((expression as Parser.FunctionCallExpression).callee), (expression as Parser.FunctionCallExpression).args.map((e) => transpileExpression(e)))
+			case Parser.ExpressionType.MatchExpression:
+				/*
+					TODO:
+					let val = match comp {
+						x => something(),
+						y => something_else(),
+						z => other(),
+						_ => panic!()
+					}
+					->
+					local val
+					if comp == x then
+						val = something()
+					elseif comp == y then
+						val = something_else()
+					elseif comp == z then
+						val = other
+					else
+						val = panic()
+					end
+					CURRENT:
+					local val = (function()
+						if comp == x then
+							return something()
+						elseif comp == y then
+							return something_else()
+						elseif comp == z then
+							return other()
+						else
+							return panic()
+						end
+					end)
+				*/
+				let statements = []
+
+				{
+					(expression as Parser.MatchExpression).cases.forEach(
+						(val: Parser.MatchCase) => statements.push(new LuauAst.LuauIfStatement(new LuauAst.LuauBinaryExpression(transpileExpression((expression as Parser.MatchExpression).comparator), '==', transpileExpression(val.comparator)),
+							val.body.statements.map((stmt) =>
+								stmt.statementType == Parser.StatementType.ExpressionStatement ? new LuauAst.LuauReturnStatement([transpileExpression((stmt as Parser.ExpressionStatement).expression)]) : transpileStatement(stmt)), undefined, undefined))
+					)
+				}
+
+				return new LuauAst.LuauFunctionCallExpression(new LuauAst.LuauClosureExpression(statements, []), [])
 			default:
 				return new LuauAst.LuauUnknownExpression()
 		}

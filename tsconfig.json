@@ -4,6 +4,9 @@
 		"lib": [
 			"es2022",
 			"dom"
-		]
+		],
+		"moduleResolution": "nodenext",
+		"module": "nodenext",
+		"allowSyntheticDefaultImports": true
 	}
 }
