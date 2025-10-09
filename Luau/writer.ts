@@ -10,7 +10,7 @@ export function write(ast: LuauAst.LuauProgram) {
 
 	// indentation support
 	let indentLevel = 0
-	const INDENT = "\t"
+	const INDENT = "    "
 
 	function indent(): string {
 		return INDENT.repeat(indentLevel)
@@ -28,7 +28,7 @@ export function write(ast: LuauAst.LuauProgram) {
 					written.push((expression as LuauAst.LuauNumberExpression).number)
 					break
 				case LuauAst.LuauExpressionType.String:
-					written.push((expression as LuauAst.LuauStringExpression).string)
+					written.push(`"${(expression as LuauAst.LuauStringExpression).string}"`)
 					break
 				case LuauAst.LuauExpressionType.BinaryExpression:
 					written.push(writeBinaryExpression(expression as LuauAst.LuauBinaryExpression))

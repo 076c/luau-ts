@@ -396,7 +396,7 @@ export function parse(tokens: Array<Token>) {
 					return parseMatchExpression()
 				}
 			default:
-				return new UnknownExpression()
+				parserError(`failed to parse expression`, current().loc)
 		}
 	}
 
@@ -563,7 +563,7 @@ export function parse(tokens: Array<Token>) {
 			let cases: Array<MatchCase> = []
 			let openingBracket = eatTypeOf(TokenType.OpeningCurlyBracket)
 
-			while (current()?.tokenType == TokenType.Identifier) {
+			while (current()?.tokenType != TokenType.ClosingCurlyBracket) {
 				let comparator = parseExpression()
 				let fat_arrow = eatTypeOf(TokenType.Equal).token + eatTypeOf(TokenType.ClosingAngledBracket).token
 				let body = null
@@ -583,7 +583,6 @@ export function parse(tokens: Array<Token>) {
 			}
 
 			let closingBracket = eatTypeOf(TokenType.ClosingCurlyBracket)
-
 			return new MatchExpression(comparator, cases)
 		} else {
 			return parseRangeExpression()
