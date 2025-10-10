@@ -138,6 +138,10 @@ export function write(ast: LuauAst.LuauProgram) {
 		return written
 	}
 
+	function writeCommentStatement(statement: LuauAst.LuauCommentStatement): string {
+		return `--${statement.comment}\n`
+	}
+
 	// TODO: group expression in the transpiler (e.g "Hello world!"() -> ("Hello world!")())
 	function writeFunctionCallExpression(expression: LuauAst.LuauFunctionCallExpression): string {
 		if (expression.callee.expressionType != LuauAst.LuauExpressionType.Identifier && expression.callee.expressionType != LuauAst.LuauExpressionType.MemberExpression && expression.callee.expressionType != LuauAst.LuauExpressionType.FieldExpression) {
@@ -229,6 +233,9 @@ export function write(ast: LuauAst.LuauProgram) {
 				break
 			case LuauAst.LuauStatementType.FunctionDeclarationStatement:
 				return writeFunctionDeclaration(statement as LuauAst.LuauFunctionDeclarationStatement)
+				break
+			case LuauAst.LuauStatementType.CommentStatement:
+				return writeCommentStatement(statement as LuauAst.LuauCommentStatement)
 				break
 			default:
 				return "-- Unknown Statement\n"

@@ -3,7 +3,6 @@ import * as LuauAst from './../Luau/ast.js'
 import * as Tokenizer from './tokenizer.js'
 
 export function transpile(program: Parser.Program) {
-	console.log(JSON.stringify(program, null, 2))
 	let index = 0
 	let statements: Array<LuauAst.LuauStatement> = []
 
@@ -103,7 +102,6 @@ export function transpile(program: Parser.Program) {
 					let comparison = new LuauAst.LuauBinaryExpression(transpileExpression(match.comparator), '==', transpileExpression(c.comparator))
 					if (c.comparator.expressionType == Parser.ExpressionType.Identifier && (c.comparator as Parser.IdentifierExpression).name == '_') {
 						c.body.statements.forEach((stmt) => {
-							console.log(stmt)
 							statements.push(transpileStatement(stmt))
 						})
 						return
@@ -116,8 +114,6 @@ export function transpile(program: Parser.Program) {
 				match.cases.forEach((c: Parser.MatchCase) => {
 					handleCase(c)
 				})
-
-				console.log(statements)
 
 				return new LuauAst.LuauFunctionCallExpression(new LuauAst.LuauClosureExpression(statements, []), [])
 			case Parser.ExpressionType.FieldExpression:
@@ -146,7 +142,6 @@ export function transpile(program: Parser.Program) {
 				return new LuauAst.LuauAssignment(variables, expressions)
 			}
 			case Parser.StatementType.ExpressionStatement: {
-				console.log("expression statement")
 				let exprStmt = statement as any
 				let e = transpileExpression(exprStmt.expression)
 				return new LuauAst.LuauExpressionStatement(e)
@@ -188,7 +183,6 @@ export function transpile(program: Parser.Program) {
 				return new LuauAst.LuauIfStatement(condition, trueBody, elseIf, elseBody)
 			}
 			case Parser.StatementType.ReturnStatement: {
-				console.log("return statement")
 				let retStmt = statement as Parser.ReturnStatement
 				let expressions = retStmt.expressions.map((e) => transpileExpression(e))
 				return new LuauAst.LuauReturnStatement(expressions)
@@ -210,9 +204,11 @@ export function transpile(program: Parser.Program) {
 				let body = funcStmt.body.map((s) => transpileStatement(s))
 				return new LuauAst.LuauFunctionDeclarationStatement(funcDef, body)
 			}
+			case Parser.StatementType.CommentStatement: {
+				let commentStmt = statement as Parser.CommentStatement
+				return new LuauAst.LuauCommentStatement(commentStmt.comment)
+			}
 			default:
-				console.log("unknown statement")
-				console.log(statement.statementType)
 				return new LuauAst.LuauExpressionStatement(new LuauAst.LuauUnknownExpression())
 		}
 	}

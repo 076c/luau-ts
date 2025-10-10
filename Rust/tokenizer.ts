@@ -1,7 +1,8 @@
 export enum TokenType {
 	Unknown, // [?]
-	Identifier, // [[!0..9]^s|Aa..Zz[0..9]]
-	Keyword,
+	Identifier, // <identifier>
+	Keyword, // <keyword>
+	Comment, // <comment>
 	Number, // [0..9:0x:.f]
 	String, // "[%s..%s|%q].."
 	OpeningParens, // (
@@ -125,6 +126,15 @@ export function tokenize(source: string): Array<Token> {
 		return s
 	}
 
+	function readComment(): string {
+		let doubleSlash = readChar() + readChar()
+		let comment = ""
+		while (position < source.length && peekChar() != "\n") {
+			comment += readChar()
+		}
+		return comment
+	}
+
 	function readNumber(): string {
 		let startingColumn = position
 		let number = ""
@@ -185,6 +195,12 @@ export function tokenize(source: string): Array<Token> {
 					type = TokenType.Mul
 					break
 				case '/':
+					if (source.charAt(position + 1) == '/') {
+						let comment = readComment()
+						let locComment = new LocRange(line, position - comment.length - 2, position)
+						tokens.push(new Token(TokenType.Comment, comment, locComment))
+						continue
+					}
 					type = TokenType.Slash
 					break
 				case '%':
@@ -255,8 +271,6 @@ export function tokenize(source: string): Array<Token> {
 	}
 
 	tokens.push(new Token(TokenType.Eof, "", new LocRange(line, position, position)));
-
-	console.log(tokens)
 
 	return tokens
 }

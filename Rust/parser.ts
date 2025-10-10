@@ -13,6 +13,7 @@ export enum StatementType {
 	ExpressionStatement,
 	FunctionDeclarationStatement,
 	EnumStatement,
+	CommentStatement,
 }
 
 export enum ExpressionType {
@@ -336,6 +337,15 @@ export class IfStatement extends Statement {
 		this.trueBody = trueBody
 		this.elseIfStatement = elseIfStatement
 		this.elseBody = elseBody
+	}
+}
+
+export class CommentStatement extends Statement {
+	comment!: string
+
+	constructor(comment: string) {
+		super(StatementType.CommentStatement)
+		this.comment = comment
 	}
 }
 
@@ -1006,9 +1016,16 @@ export function parse(tokens: Array<Token>) {
 			return parseEnum()
 		} else if (current().tokenType == TokenType.Keyword && current().token == "fn") {
 			return parseFunctionDecl()
+		} else if (current().tokenType == TokenType.Comment) {
+			return parseCommentStatement()
 		} else {
 			return parseExpressionStatement()
 		}
+	}
+
+	function parseCommentStatement(): CommentStatement {
+		let comment = eatTypeOf(TokenType.Comment)
+		return new CommentStatement(comment.token)
 	}
 
 	while (tokenIndex < tokens.length) {

@@ -9,6 +9,7 @@ export enum LuauStatementType {
 	ExpressionStatement,
 	ReturnStatement,
 	FunctionDeclarationStatement,
+	CommentStatement,
 }
 
 export enum LuauExpressionType {
@@ -247,6 +248,15 @@ export class LuauReturnStatement extends LuauStatement {
 	constructor(values: Array<LuauExpression>) {
 		super(LuauStatementType.ReturnStatement)
 		this.values = values
+	}
+}
+
+export class LuauCommentStatement extends LuauStatement {
+	comment!: string
+
+	constructor(comment: string) {
+		super(LuauStatementType.CommentStatement)
+		this.comment = comment
 	}
 }
 

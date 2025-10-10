@@ -2,7 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Token = exports.LocRange = exports.Keywords = exports.TokenType = void 0;
 exports.tokenize = tokenize;
-exports.test = test;
 var TokenType;
 (function (TokenType) {
     TokenType[TokenType["Unknown"] = 0] = "Unknown";
@@ -240,18 +239,3 @@ function tokenize(source) {
     }
     return tokens;
 }
-function test() {
-    let samples = [
-        "let mut a = b"
-    ];
-    let index = 0;
-    for (let val of samples) {
-        console.log(`SAMPLE ${index}\n`);
-        let tokens = tokenize(val);
-        tokens.forEach(function (val) {
-            console.log(`${val.toString()}\n`);
-        });
-        index++;
-    }
-}
-test();
