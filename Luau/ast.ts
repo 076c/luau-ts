@@ -20,6 +20,8 @@ export enum LuauExpressionType {
 	UnaryExpression,
 	FunctionCall,
 	ClosureExpression,
+	MemberExpression,
+	FieldExpression
 }
 
 export enum LuauLocalType {
@@ -129,6 +131,28 @@ export class LuauFunctionCallExpression extends LuauExpression {
 		super(LuauExpressionType.FunctionCall)
 		this.callee = callee
 		this.args = args
+	}
+}
+
+export class LuauMemberExpression extends LuauExpression {
+	object!: LuauExpression
+	property!: LuauExpression
+
+	constructor(object: LuauExpression, property: LuauExpression) {
+		super(LuauExpressionType.MemberExpression)
+		this.object = object
+		this.property = property
+	}
+}
+
+export class LuauFieldExpression extends LuauExpression {
+	object!: LuauExpression
+	property!: LuauExpression
+
+	constructor(object: LuauExpression, property: LuauExpression) {
+		super(LuauExpressionType.FieldExpression)
+		this.object = object
+		this.property = property
 	}
 }
 

@@ -25,6 +25,8 @@ export enum ExpressionType {
 	UnaryExpression,
 	ArrayExpression,
 	MatchExpression,
+	MemberExpression,
+	FieldExpression
 }
 
 export enum LocalType {
@@ -208,6 +210,28 @@ export class MatchExpression extends Expression {
 		super(ExpressionType.MatchExpression)
 		this.comparator = comparator
 		this.cases = cases
+	}
+}
+
+export class MemberExpression extends Expression {
+	object!: Expression
+	property!: Expression
+
+	constructor(object: Expression, property: Expression) {
+		super(ExpressionType.MemberExpression)
+		this.object = object
+		this.property = property
+	}
+}
+
+export class FieldExpression extends Expression {
+	object!: Expression
+	property!: Expression
+
+	constructor(object: Expression, property: Expression) {
+		super(ExpressionType.FieldExpression)
+		this.object = object
+		this.property = property
 	}
 }
 
@@ -595,6 +619,20 @@ export function parse(tokens: Array<Token>) {
 
 	function parseFunctionCall(): Expression {
 		let expr = parsePrimaryExpression()
+		if (current()?.tokenType == TokenType.Dot) {
+			let dot = eatTypeOf(TokenType.Dot)
+			let property = parsePrimaryExpression()
+			if (property.expressionType != ExpressionType.Identifier && property.expressionType != ExpressionType.Number) {
+				parserError("expected identifier", current()?.loc)
+			}
+			expr = new MemberExpression(expr, property)
+		} else if (current()?.tokenType == TokenType.OpeningBracket) {
+			let openingBracket = eatTypeOf(TokenType.OpeningBracket)
+			let index = parseExpression()
+			let closingBracket = eatTypeOf(TokenType.ClosingBracket)
+			expr = new FieldExpression(expr, index)
+		}
+
 		let isMacro = current()?.tokenType == TokenType.Exclamation ? (eat() && true) : false
 
 		while (current() && current()?.tokenType == TokenType.OpeningParens) {
@@ -731,6 +769,15 @@ export function parse(tokens: Array<Token>) {
 		}
 	}
 
+	function parseReturnStatement(): ReturnStatement {
+		let keyword = eatTypeOf(TokenType.Keyword)
+		let expressions: Array<Expression> = new Array<Expression>()
+		expressions.push(parseExpression())
+		let semiColon = eatTypeOf(TokenType.Semicolon)
+
+		return new ReturnStatement(true, expressions)
+	}
+
 	function parseStatement() {
 		if (current().tokenType == TokenType.Keyword && current().token == "let") {
 			return parseAssignment()
@@ -738,6 +785,8 @@ export function parse(tokens: Array<Token>) {
 			return parseReAssignment()
 		} else if (current().tokenType == TokenType.Keyword && current().token == "if") {
 			return parseIfStatement()
+		} else if (current().tokenType == TokenType.Keyword && current().token == "return") {
+			return parseReturnStatement()
 		} else {
 			return parseExpressionStatement()
 		}

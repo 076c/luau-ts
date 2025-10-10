@@ -30,7 +30,7 @@ export enum TokenType {
 	Eof,
 }
 
-export const Keywords = ["let", "mut", "fn", "struct", "impl", "for", "where", "if", "else", "match"]
+export const Keywords = ["let", "mut", "fn", "struct", "impl", "for", "where", "if", "else", "match", "return"]
 
 export class LocRange {
 	line!: number

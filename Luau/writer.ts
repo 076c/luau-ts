@@ -48,6 +48,12 @@ export function write(ast: LuauAst.LuauProgram) {
 					closureStr += `${indent()}end`
 					written.push(closureStr)
 					break
+				case LuauAst.LuauExpressionType.FieldExpression:
+					written.push(writeFieldExpression(expression as LuauAst.LuauFieldExpression))
+					break
+				case LuauAst.LuauExpressionType.MemberExpression:
+					written.push(writeMemberExpression(expression as LuauAst.LuauMemberExpression))
+					break
 				default:
 					written.push("--[[ UNKNOWN EXPRESSION ]]")
 					break
@@ -55,6 +61,14 @@ export function write(ast: LuauAst.LuauProgram) {
 		})
 
 		return written.join(", ")
+	}
+
+	function writeMemberExpression(expression: LuauAst.LuauMemberExpression): string {
+		return `${writeExpressions(new Array<LuauAst.LuauExpression>(expression.object))}.${writeExpressions(new Array<LuauAst.LuauExpression>(expression.property))}`
+	}
+
+	function writeFieldExpression(expression: LuauAst.LuauFieldExpression): string {
+		return `${writeExpressions(new Array<LuauAst.LuauExpression>(expression.object))}[${writeExpressions(new Array<LuauAst.LuauExpression>(expression.property))}]`
 	}
 
 	function writeTypeDef(typeDef: LuauAst.LuauTypeDef): string {
@@ -89,8 +103,10 @@ export function write(ast: LuauAst.LuauProgram) {
 			}`
 	}
 
+
+	// TODO: group expression in the transpiler (e.g "Hello world!"() -> ("Hello world!")())
 	function writeFunctionCallExpression(expression: LuauAst.LuauFunctionCallExpression): string {
-		if (expression.callee.expressionType != LuauAst.LuauExpressionType.Identifier) {
+		if (expression.callee.expressionType != LuauAst.LuauExpressionType.Identifier && expression.callee.expressionType != LuauAst.LuauExpressionType.MemberExpression && expression.callee.expressionType != LuauAst.LuauExpressionType.FieldExpression) {
 			return `(${writeExpressions(new Array<LuauAst.LuauExpression>(expression.callee))})(${writeExpressions(expression.args)})`
 		} else {
 			return `${writeExpressions(new Array<LuauAst.LuauExpression>(expression.callee))}(${writeExpressions(expression.args)})`

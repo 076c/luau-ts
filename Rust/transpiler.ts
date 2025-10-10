@@ -3,6 +3,7 @@ import * as LuauAst from './../Luau/ast.js'
 import * as Tokenizer from './tokenizer.js'
 
 export function transpile(program: Parser.Program) {
+	console.log(JSON.stringify(program, null, 2))
 	let index = 0
 	let statements: Array<LuauAst.LuauStatement> = []
 
@@ -119,6 +120,10 @@ export function transpile(program: Parser.Program) {
 				console.log(statements)
 
 				return new LuauAst.LuauFunctionCallExpression(new LuauAst.LuauClosureExpression(statements, []), [])
+			case Parser.ExpressionType.FieldExpression:
+				return new LuauAst.LuauFieldExpression(transpileExpression((expression as Parser.FieldExpression).object), transpileExpression((expression as Parser.FieldExpression).property))
+			case Parser.ExpressionType.MemberExpression:
+				return new LuauAst.LuauMemberExpression(transpileExpression((expression as Parser.MemberExpression).object), transpileExpression((expression as Parser.MemberExpression).property))
 			default:
 				return new LuauAst.LuauUnknownExpression()
 		}
