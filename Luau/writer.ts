@@ -125,7 +125,7 @@ export function write(ast: LuauAst.LuauProgram) {
 		indentLevel++
 		statement.body.forEach((stmt) => written += writeStatement(stmt))
 		indentLevel--
-		written += `${indent()}end;`
+		written += `${indent()}end;\n`
 		return written
 	}
 
