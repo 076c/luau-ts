@@ -87,7 +87,7 @@ export function tokenize(source: string): Array<Token> {
 	}
 
 	function isAlnum(c: string): boolean {
-		return /^[a-z0-9]$/i.test(c)
+		return /^[a-z0-9_]$/i.test(c)
 	}
 
 	// TODO: remove this
@@ -258,22 +258,3 @@ export function tokenize(source: string): Array<Token> {
 
 	return tokens
 }
-
-export function test(): void {
-	let samples = [
-		"let mut a = b"
-	]
-
-	let index = 0
-
-	for (let val of samples) {
-		console.log(`SAMPLE ${index}\n`)
-		let tokens: Array<Token> = tokenize(val)
-		tokens.forEach(function (val) {
-			console.log(`${val.toString()}\n`)
-		})
-		index++
-	}
-}
-
-test()

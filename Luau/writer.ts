@@ -128,7 +128,7 @@ export function write(ast: LuauAst.LuauProgram) {
 		// write the initial if
 		out += `${indent()}if ${writeExpressions(new Array<LuauAst.LuauExpression>(ifStmt.condition))} then\n`
 		indentLevel++
-		ifStmt.trueBody.forEach((s) => { out += writeStatement(s) })
+		ifStmt.trueBody.forEach((s) => { console.log(s); out += writeStatement(s) })
 		indentLevel--
 
 		// handle else-if chain
@@ -178,7 +178,7 @@ export function write(ast: LuauAst.LuauProgram) {
 				return writeReturnStatement((statement as LuauAst.LuauReturnStatement).values)
 				break
 			default:
-				return "-- Unknown Statement"
+				return "-- Unknown Statement\n"
 				break
 		}
 	}
@@ -190,29 +190,4 @@ export function write(ast: LuauAst.LuauProgram) {
 	}
 
 	return source
-}
-
-export function test() {
-	let samples = [
-		`
-		let func = print;
-
-		if func == print {
-			func!("Hello world!");
-		} else {
-			func!("{}", 1 | 2 ^ 3 & (4 + 5))	
-		}
-		`
-	]
-
-	samples.forEach((source) => {
-		let tokens = tokenize(source)
-		let parsed = Parser.parse(tokens)
-
-		console.log("AST:", JSON.stringify(parsed, null, 2))
-
-		let transpiled = transpile(parsed)
-		let src = write(transpiled)
-		console.log(src)
-	})
 }

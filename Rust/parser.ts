@@ -563,18 +563,22 @@ export function parse(tokens: Array<Token>) {
 			let cases: Array<MatchCase> = []
 			let openingBracket = eatTypeOf(TokenType.OpeningCurlyBracket)
 
-			while (current()?.tokenType != TokenType.ClosingCurlyBracket) {
+			// TODO: fix last case not being parsed
+			while (current()?.tokenType != TokenType.ClosingCurlyBracket && current()?.tokenType != TokenType.Comma) {
 				let comparator = parseExpression()
 				let fat_arrow = eatTypeOf(TokenType.Equal).token + eatTypeOf(TokenType.ClosingAngledBracket).token
 				let body = null
 
 				if (current().tokenType == TokenType.OpeningCurlyBracket) {
 					body = parseChunk()
+					if (current().tokenType == TokenType.Comma) {
+						let comma = eatTypeOf(TokenType.Comma)
+					}
 				} else {
-					body = new Chunk([parseStatement()])
-					if (current()?.tokenType != TokenType.Comma) {
-						break
-					} else {
+					body = new Chunk([
+						parseStatement()
+					])
+					if (current().tokenType == TokenType.Comma) {
 						let comma = eatTypeOf(TokenType.Comma)
 					}
 				}
@@ -719,9 +723,10 @@ export function parse(tokens: Array<Token>) {
 	function parseExpressionStatement(): ExpressionStatement | ReturnStatement {
 		let expr = parseExpression()
 
-		if (current().tokenType == TokenType.Semicolon) {
+		if (current().tokenType != TokenType.Semicolon) {
 			return new ReturnStatement(true, new Array<Expression>(expr))
 		} else {
+			eat() // semicolon
 			return new ExpressionStatement(expr)
 		}
 	}
@@ -748,22 +753,4 @@ export function parse(tokens: Array<Token>) {
 	}
 
 	return new Program(statements)
-}
-
-export function test() {
-	let tokens = tokenize(`
-		let mut a = 1;
-		let mut b: Vec<u8> = Vec;
-
-		if (b + a) {
-		
-		} else if a + c {
-		
-		} else {
-			
-		}
-		`)
-	let parsed = parse(tokens)
-
-	console.log("AST:", JSON.stringify(parsed, null, 2))
 }

@@ -94,15 +94,29 @@ export function transpile(program: Parser.Program) {
 						end
 					end)
 				*/
+				// TODO: I(C) := C
+				let match = (expression as Parser.MatchExpression)
 				let statements = []
 
-				{
-					(expression as Parser.MatchExpression).cases.forEach(
-						(val: Parser.MatchCase) => statements.push(new LuauAst.LuauIfStatement(new LuauAst.LuauBinaryExpression(transpileExpression((expression as Parser.MatchExpression).comparator), '==', transpileExpression(val.comparator)),
-							val.body.statements.map((stmt) =>
-								stmt.statementType == Parser.StatementType.ExpressionStatement ? new LuauAst.LuauReturnStatement([transpileExpression((stmt as Parser.ExpressionStatement).expression)]) : transpileStatement(stmt)), undefined, undefined))
-					)
+				let handleCase = (c: Parser.MatchCase) => {
+					let comparison = new LuauAst.LuauBinaryExpression(transpileExpression(match.comparator), '==', transpileExpression(c.comparator))
+					if (c.comparator.expressionType == Parser.ExpressionType.Identifier && (c.comparator as Parser.IdentifierExpression).name == '_') {
+						c.body.statements.forEach((stmt) => {
+							console.log(stmt)
+							statements.push(transpileStatement(stmt))
+						})
+						return
+					}
+
+					let ifStmt = new LuauAst.LuauIfStatement(comparison, c.body.statements.map((stmt) => transpileStatement(stmt)), undefined, undefined)
+					statements.push(ifStmt)
 				}
+
+				match.cases.forEach((c: Parser.MatchCase) => {
+					handleCase(c)
+				})
+
+				console.log(statements)
 
 				return new LuauAst.LuauFunctionCallExpression(new LuauAst.LuauClosureExpression(statements, []), [])
 			default:
@@ -123,6 +137,7 @@ export function transpile(program: Parser.Program) {
 				return new LuauAst.LuauAssignment(variables, expressions)
 			}
 			case Parser.StatementType.ExpressionStatement: {
+				console.log("expression statement")
 				let exprStmt = statement as any
 				let e = transpileExpression(exprStmt.expression)
 				return new LuauAst.LuauExpressionStatement(e)
@@ -163,8 +178,16 @@ export function transpile(program: Parser.Program) {
 
 				return new LuauAst.LuauIfStatement(condition, trueBody, elseIf, elseBody)
 			}
+			case Parser.StatementType.ReturnStatement: {
+				console.log("return statement")
+				let retStmt = statement as Parser.ReturnStatement
+				let expressions = retStmt.expressions.map((e) => transpileExpression(e))
+				return new LuauAst.LuauReturnStatement(expressions)
+			}
 			default:
-				return undefined
+				console.log("unknown statement")
+				console.log(statement.statementType)
+				return new LuauAst.LuauExpressionStatement(new LuauAst.LuauUnknownExpression())
 		}
 	}
 
@@ -212,18 +235,4 @@ export function transpile(program: Parser.Program) {
 	let exportedFunc = ((stmts) => stmts.map((stmt) => stmt.statementType))(statements)
 
 	return new LuauAst.LuauProgram(statements)
-}
-
-export function test() {
-	let samples = [
-		"let a = b()()"
-	]
-
-	samples.forEach((source) => {
-		let tokens = Tokenizer.tokenize(source)
-		let parsed = Parser.parse(tokens)
-
-		let transpiled = transpile(parsed)
-		console.log(JSON.stringify(transpiled, null, 2))
-	})
 }
