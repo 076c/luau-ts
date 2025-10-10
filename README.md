@@ -13,7 +13,7 @@ To use this, run (with node) `node main.js`.
 - -n determines if the application runs in interactive mode (capture input until force end)
 
 # TODOS:
-Check (Todos)[./TODOS.md]
+Check [Todos](./TODOS.md)
 
 # License
-Check (License)[./LICENSE.md]
+Check [License](./LICENSE.md)
