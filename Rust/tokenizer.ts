@@ -30,7 +30,7 @@ export enum TokenType {
 	Eof,
 }
 
-export const Keywords = ["let", "mut", "fn", "struct", "impl", "for", "where", "if", "else", "match", "return"]
+export const Keywords = ["let", "mut", "fn", "struct", "impl", "for", "where", "if", "else", "match", "return", "enum"]
 
 export class LocRange {
 	line!: number
@@ -255,6 +255,8 @@ export function tokenize(source: string): Array<Token> {
 	}
 
 	tokens.push(new Token(TokenType.Eof, "", new LocRange(line, position, position)));
+
+	console.log(tokens)
 
 	return tokens
 }

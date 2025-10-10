@@ -12,6 +12,7 @@ export enum StatementType {
 	ReturnStatement,
 	ExpressionStatement,
 	FunctionDeclarationStatement,
+	EnumStatement,
 }
 
 export enum ExpressionType {
@@ -26,7 +27,10 @@ export enum ExpressionType {
 	ArrayExpression,
 	MatchExpression,
 	MemberExpression,
-	FieldExpression
+	FieldExpression,
+	DictionaryExpression,
+	PathExpression,
+	ClosureExpression
 }
 
 export enum LocalType {
@@ -192,6 +196,17 @@ export class ArrayExpression extends Expression {
 	}
 }
 
+export class ClosureExpression extends Expression {
+	body!: Chunk
+	args!: Array<VarDef>
+
+	constructor(body: Chunk, args: Array<VarDef>) {
+		super(ExpressionType.ClosureExpression)
+		this.body = body
+		this.args = args
+	}
+}
+
 export class MatchCase {
 	comparator!: Expression
 	body!: Chunk
@@ -236,7 +251,25 @@ export class FieldExpression extends Expression {
 }
 
 // TODO: impl
-export class DictionaryExpression extends Expression { }
+export class DictionaryExpression extends Expression {
+	keyValuePairs!: Array<{ key: Expression, value: Expression }>
+
+	constructor(keyValuePairs: Array<{ key: Expression, value: Expression }>) {
+		super(ExpressionType.DictionaryExpression)
+		this.keyValuePairs = keyValuePairs
+	}
+}
+
+export class PathExpression extends Expression {
+	object!: Expression
+	property!: Expression
+
+	constructor(object: Expression, property: Expression) {
+		super(ExpressionType.PathExpression)
+		this.object = object
+		this.property = property
+	}
+}
 
 export class UnknownExpression extends Expression {
 	constructor() {
@@ -265,6 +298,28 @@ export class ReAssignment extends Statement {
 		super(StatementType.ReAssignment)
 		this.local = local
 		this.value = value
+	}
+}
+
+export class EnumStatement extends Statement {
+	name!: string
+	members!: Array<string>
+
+	constructor(name: string, members: Array<string>) {
+		super(StatementType.EnumStatement)
+		this.name = name
+		this.members = members
+	}
+}
+
+export class FunctionDeclarationStatement extends Statement {
+	funcDef!: FuncDef
+	body!: Array<Statement>
+
+	constructor(funcDef: FuncDef, body: Array<Statement>) {
+		super(StatementType.FunctionDeclarationStatement)
+		this.funcDef = funcDef
+		this.body = body
 	}
 }
 
@@ -419,6 +474,8 @@ export function parse(tokens: Array<Token>) {
 				if (current()?.token == "match") {
 					return parseMatchExpression()
 				}
+			case TokenType.Pipe:
+				return parseClosureExpression()
 			default:
 				parserError(`failed to parse expression`, current().loc)
 		}
@@ -472,10 +529,10 @@ export function parse(tokens: Array<Token>) {
 
 	function parseRangeExpression(): Expression {
 		let left = parseLogAndExpression()
-		while (current()?.tokenType == TokenType.Dot) {
-			let dot = eat()
+		while (current()?.tokenType == TokenType.Dot && tokens.at(tokenIndex + 1)?.tokenType == TokenType.Dot) {
+			let dot = eat().token + eat().token // .. -> ..
 			let right = parseAdditiveExpression()
-			left = new BinaryExpression(left, "..", right)
+			left = new BinaryExpression(left, dot, right)
 		}
 
 		return left
@@ -617,43 +674,201 @@ export function parse(tokens: Array<Token>) {
 		}
 	}
 
+	function parseEnum(): Statement {
+		let kword = eatTypeOf(TokenType.Keyword) // enum
+		let name = eatTypeOf(TokenType.Identifier)
+		let openingBracket = eatTypeOf(TokenType.OpeningCurlyBracket)
+		let members: Array<string> = []
+		while (current()?.tokenType != TokenType.ClosingCurlyBracket) {
+			let member = eatTypeOf(TokenType.Identifier)
+			members.push(member.token)
+			if (current()?.tokenType == TokenType.Comma) {
+				let comma = eatTypeOf(TokenType.Comma)
+			} else {
+				break
+			}
+		}
+		let closingBracket = eatTypeOf(TokenType.ClosingCurlyBracket)
+		return new EnumStatement(name.token, members)
+	}
+
+	function parseFunctionDecl(): Statement {
+		let kword = eatTypeOf(TokenType.Keyword) // fn
+		let name = eatTypeOf(TokenType.Identifier)
+		let openingParenthesis = eatTypeOf(TokenType.OpeningParens)
+		let params: Array<VarDef> = []
+		while (current()?.tokenType != TokenType.ClosingParens) {
+			let param = eatTypeOf(TokenType.Identifier).token
+			let type = undefined
+
+			if (current().tokenType == TokenType.Colon) {
+				let colon = eat()
+				type = parseTypeDefinition()
+			}
+			params.push(new VarDef(param, type))
+			if (current()?.tokenType == TokenType.Comma) {
+				let comma = eatTypeOf(TokenType.Comma)
+			} else {
+				break
+			}
+		}
+		let closingParenthesis = eatTypeOf(TokenType.ClosingParens)
+		let returnType: TypeDef | undefined = undefined
+		if (current()?.tokenType == TokenType.Sub) {
+			let sub = eatTypeOf(TokenType.Sub).token + eatTypeOf(TokenType.ClosingAngledBracket).token
+			returnType = parseTypeDefinition()
+		}
+		let openingBracket = eatTypeOf(TokenType.OpeningCurlyBracket)
+		let body: Array<Statement> = []
+		while (current()?.tokenType != TokenType.ClosingCurlyBracket) {
+			let stmt = parseStatement()
+			body.push(stmt)
+		}
+		let closingBracket = eatTypeOf(TokenType.ClosingCurlyBracket)
+		return new FunctionDeclarationStatement(new FuncDef(name.token, params, returnType), body)
+	}
+
+	// function parseFunctionCall(): Expression {
+	// 	let expr = parsePathExpression()
+	// 	while (current()?.tokenType == TokenType.Dot) {
+	// 		let dot = eatTypeOf(TokenType.Dot)
+	// 		let property = parsePathExpression()
+	// 		if (property.expressionType != ExpressionType.Identifier && property.expressionType != ExpressionType.Number) {
+	// 			parserError(`expected identifier, got ${property.expressionType}`, current()?.loc)
+	// 		}
+	// 		expr = new MemberExpression(expr, property)
+	// 	}
+	// 	// if (current()?.tokenType == TokenType.Dot) {
+	// 	// 	let dot = eatTypeOf(TokenType.Dot)
+	// 	// 	let property = parsePathExpression()
+	// 	// 	if (property.expressionType != ExpressionType.Identifier && property.expressionType != ExpressionType.Number) {
+	// 	// 		parserError(`expected identifier, got ${property.expressionType}`, current()?.loc)
+	// 	// 	}
+	// 	// 	expr = new MemberExpression(expr, property)
+	// 	// } else if 
+	// 	while (current()?.tokenType == TokenType.OpeningBracket) {
+	// 		let openingBracket = eatTypeOf(TokenType.OpeningBracket)
+	// 		let index = parseExpression()
+	// 		let closingBracket = eatTypeOf(TokenType.ClosingBracket)
+	// 		expr = new FieldExpression(expr, index)
+	// 	}
+
+	// 	let isMacro = current()?.tokenType == TokenType.Exclamation ? (eat() && true) : false
+
+	// 	while (current() && current()?.tokenType == TokenType.OpeningParens) {
+	// 		let openingParen = eatTypeOf(TokenType.OpeningParens)
+	// 		let args: Array<Expression> = []
+
+	// 		while (current() && current().tokenType != TokenType.ClosingParens) {
+	// 			let before = tokenIndex
+	// 			args.push(parseExpression())
+	// 			if (current().tokenType == TokenType.Comma) {
+	// 				let comma = eatTypeOf(TokenType.Comma)
+	// 			} else {
+	// 				break
+	// 			}
+	// 			if (tokenIndex === before) parserError('unable to parse function call argument', current()?.loc)
+	// 		}
+
+	// 		let closingParen = eatTypeOf(TokenType.ClosingParens)
+	// 		expr = new FunctionCallExpression(expr, args)
+	// 	}
+
+	// 	return expr
+	// }
+
 	function parseFunctionCall(): Expression {
-		let expr = parsePrimaryExpression()
-		if (current()?.tokenType == TokenType.Dot) {
-			let dot = eatTypeOf(TokenType.Dot)
-			let property = parsePrimaryExpression()
-			if (property.expressionType != ExpressionType.Identifier && property.expressionType != ExpressionType.Number) {
-				parserError("expected identifier", current()?.loc)
+		let expr = parsePathExpression();
+
+		while (true) {
+			if (current()?.tokenType === TokenType.Dot) {
+				let dot = eatTypeOf(TokenType.Dot);
+				let property = parsePathExpression();
+				if (property.expressionType !== ExpressionType.Identifier && property.expressionType !== ExpressionType.Number) {
+					parserError(`Expected identifier or number, got ${property.expressionType}`, current()?.loc);
+				}
+				expr = new MemberExpression(expr, property);
+			} else if (current()?.tokenType === TokenType.OpeningBracket) {
+				let openingBracket = eatTypeOf(TokenType.OpeningBracket);
+				let index = parseExpression();
+				let closingBracket = eatTypeOf(TokenType.ClosingBracket);
+				expr = new FieldExpression(expr, index);
+			} else if (current()?.tokenType === TokenType.Exclamation) {
+				eat();
+			} else if (current()?.tokenType === TokenType.OpeningParens) {
+				let openingParen = eatTypeOf(TokenType.OpeningParens);
+				let args: Expression[] = [];
+
+				while (current() && current()?.tokenType !== TokenType.ClosingParens) {
+					let before = tokenIndex;
+					args.push(parseExpression());
+					if (current()?.tokenType === TokenType.Comma) {
+						eatTypeOf(TokenType.Comma);
+					} else {
+						break;
+					}
+					if (tokenIndex === before) {
+						parserError('Unable to parse function call argument', current()?.loc);
+					}
+				}
+
+				let closingParen = eatTypeOf(TokenType.ClosingParens);
+				expr = new FunctionCallExpression(expr, args);
+			} else {
+				break;
 			}
-			expr = new MemberExpression(expr, property)
-		} else if (current()?.tokenType == TokenType.OpeningBracket) {
-			let openingBracket = eatTypeOf(TokenType.OpeningBracket)
-			let index = parseExpression()
-			let closingBracket = eatTypeOf(TokenType.ClosingBracket)
-			expr = new FieldExpression(expr, index)
 		}
 
-		let isMacro = current()?.tokenType == TokenType.Exclamation ? (eat() && true) : false
-
-		while (current() && current()?.tokenType == TokenType.OpeningParens) {
-			let openingParen = eatTypeOf(TokenType.OpeningParens)
-			let args: Array<Expression> = []
-
-			while (current() && current().tokenType != TokenType.ClosingParens) {
-				let before = tokenIndex
-				args.push(parseExpression())
-				if (tokenIndex === before) parserError('unable to parse function call argument', current()?.loc)
-			}
-
-			let closingParen = eatTypeOf(TokenType.ClosingParens)
-			expr = new FunctionCallExpression(expr, args)
-		}
-
-		return expr
+		return expr;
 	}
 
 	function parseExpression(): Expression {
 		return parseRangeExpression()
+	}
+
+	function parsePathExpression(): Expression {
+		let object = parsePrimaryExpression()
+		while (current()?.tokenType == TokenType.Colon && tokens.at(tokenIndex + 1)?.tokenType == TokenType.Colon) {
+			if (object.expressionType != ExpressionType.Identifier) {
+				parserError(`expected identifier, got '${ExpressionType[object.expressionType]}'`, current()?.loc)
+			}
+			let doubleColon = eatTypeOf(TokenType.Colon).token + eatTypeOf(TokenType.Colon).token
+			let property = parsePrimaryExpression()
+			if (property.expressionType != ExpressionType.Identifier) {
+				parserError(`expected identifier, got '${ExpressionType[property.expressionType]}'`, current()?.loc)
+			}
+			object = new PathExpression(object, property)
+		}
+		return object
+	}
+
+	function parseClosureExpression(): Expression {
+		let openingPipe = eatTypeOf(TokenType.Pipe)
+		let args: Array<VarDef> = []
+		while (current()?.tokenType != TokenType.Pipe) {
+			let before = tokenIndex
+			let name = eatTypeOf(TokenType.Identifier).token
+			let type = undefined
+
+			if (current().tokenType == TokenType.Colon) {
+				let colon = eat()
+				type = parseTypeDefinition()
+			}
+			args.push(new VarDef(name, type))
+			if (tokenIndex === before) parserError('unable to parse function argument', current()?.loc)
+		}
+		let closingPipe = eatTypeOf(TokenType.Pipe)
+		let openingBracket = eatTypeOf(TokenType.OpeningCurlyBracket)
+		let body: Array<Statement> = []
+		while (current()?.tokenType != TokenType.ClosingCurlyBracket) {
+			let before = tokenIndex
+			let stmt = parseStatement()
+			if (stmt === undefined) parserError('unable to parse statement in chunk', current()?.loc)
+			body.push(stmt)
+			if (tokenIndex === before) parserError('parser did not advance while parsing chunk', current()?.loc)
+		}
+		let closingBracket = eatTypeOf(TokenType.ClosingCurlyBracket)
+		return new ClosureExpression(new Chunk(body), args)
 	}
 
 	function parseTypesArguments(openingType: TokenType, closingType: TokenType): Array<TypeDef> {
@@ -787,6 +1002,10 @@ export function parse(tokens: Array<Token>) {
 			return parseIfStatement()
 		} else if (current().tokenType == TokenType.Keyword && current().token == "return") {
 			return parseReturnStatement()
+		} else if (current().tokenType == TokenType.Keyword && current().token == "enum") {
+			return parseEnum()
+		} else if (current().tokenType == TokenType.Keyword && current().token == "fn") {
+			return parseFunctionDecl()
 		} else {
 			return parseExpressionStatement()
 		}

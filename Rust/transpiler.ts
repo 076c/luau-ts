@@ -19,7 +19,7 @@ export function transpile(program: Parser.Program) {
 		let types = new Array<LuauAst.LuauTypeDef>()
 		typeDef.additionalParams.forEach((param) => types.push(transpileTypeDef(param)))
 
-		return new LuauAst.LuauTypeDef(transpileIdentifierExpression(typeDef.type), types, typeDef.tupleReturn.map((f) => transpileTypeDef(f)))
+		return new LuauAst.LuauTypeDef(transpileIdentifierExpression(typeDef.type), types, typeDef.tupleReturn && (typeDef.tupleReturn.map((f) => transpileTypeDef(f))))
 	}
 
 	function transpileExpression(expression: Parser.Expression) {
@@ -124,6 +124,10 @@ export function transpile(program: Parser.Program) {
 				return new LuauAst.LuauFieldExpression(transpileExpression((expression as Parser.FieldExpression).object), transpileExpression((expression as Parser.FieldExpression).property))
 			case Parser.ExpressionType.MemberExpression:
 				return new LuauAst.LuauMemberExpression(transpileExpression((expression as Parser.MemberExpression).object), transpileExpression((expression as Parser.MemberExpression).property))
+			case Parser.ExpressionType.PathExpression:
+				return new LuauAst.LuauMemberExpression(transpileExpression((expression as Parser.PathExpression).object), transpileExpression((expression as Parser.PathExpression).property))
+			case Parser.ExpressionType.ClosureExpression:
+				return new LuauAst.LuauClosureExpression((expression as Parser.ClosureExpression).body.statements.map((stmt) => transpileStatement(stmt)), (expression as Parser.ClosureExpression).args.map((p) => transpileVarDef(p)))
 			default:
 				return new LuauAst.LuauUnknownExpression()
 		}
@@ -189,6 +193,23 @@ export function transpile(program: Parser.Program) {
 				let expressions = retStmt.expressions.map((e) => transpileExpression(e))
 				return new LuauAst.LuauReturnStatement(expressions)
 			}
+			case Parser.StatementType.EnumStatement: {
+				let enumStmt = statement as Parser.EnumStatement
+				let enumIndex = 0
+				let members = enumStmt.members.map((m) => {
+					let def = new LuauAst.LuauVarDef(m, undefined)
+					let val = new LuauAst.LuauNumberExpression(enumIndex.toString())
+					enumIndex++
+					return { key: def, value: val }
+				})
+				return new LuauAst.LuauAssignment([new LuauAst.LuauVarDef(enumStmt.name, undefined)], [new LuauAst.LuauDictionaryExpression(members)])
+			}
+			case Parser.StatementType.FunctionDeclarationStatement: {
+				let funcStmt = statement as Parser.FunctionDeclarationStatement
+				let funcDef = new LuauAst.LuauFuncDef(funcStmt.funcDef.funcName, funcStmt.funcDef.params.map((p) => transpileVarDef(p)), funcStmt.funcDef.returnType && transpileTypeDef(funcStmt.funcDef.returnType))
+				let body = funcStmt.body.map((s) => transpileStatement(s))
+				return new LuauAst.LuauFunctionDeclarationStatement(funcDef, body)
+			}
 			default:
 				console.log("unknown statement")
 				console.log(statement.statementType)
@@ -236,8 +257,6 @@ export function transpile(program: Parser.Program) {
 
 		lookupIndex++
 	}
-
-	let exportedFunc = ((stmts) => stmts.map((stmt) => stmt.statementType))(statements)
 
 	return new LuauAst.LuauProgram(statements)
 }

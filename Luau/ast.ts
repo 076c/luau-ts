@@ -8,6 +8,7 @@ export enum LuauStatementType {
 	IfStatement,
 	ExpressionStatement,
 	ReturnStatement,
+	FunctionDeclarationStatement,
 }
 
 export enum LuauExpressionType {
@@ -21,7 +22,8 @@ export enum LuauExpressionType {
 	FunctionCall,
 	ClosureExpression,
 	MemberExpression,
-	FieldExpression
+	FieldExpression,
+	DictionaryExpression
 }
 
 export enum LuauLocalType {
@@ -156,6 +158,26 @@ export class LuauFieldExpression extends LuauExpression {
 	}
 }
 
+export class LuauDictionaryExpression extends LuauExpression {
+	keyValuePairs!: Array<{ key: LuauVarDef, value: LuauExpression }>
+
+	constructor(keyValuePairs: Array<{ key: LuauVarDef, value: LuauExpression }>) {
+		super(LuauExpressionType.DictionaryExpression)
+		this.keyValuePairs = keyValuePairs
+	}
+}
+
+export class LuauFunctionDeclarationStatement extends LuauStatement {
+	funcDef!: LuauFuncDef
+	body!: Array<LuauStatement>
+
+	constructor(funcDef: LuauFuncDef, body: Array<LuauStatement>) {
+		super(LuauStatementType.FunctionDeclarationStatement)
+		this.funcDef = funcDef
+		this.body = body
+	}
+}
+
 export class LuauUnknownExpression extends LuauExpression {
 	constructor() {
 		super(LuauExpressionType.UnknownExpression)
@@ -167,6 +189,19 @@ export class LuauLocal {
 
 	constructor(localType: LuauLocalType) {
 		this.localType = localType
+	}
+}
+
+export class LuauFuncDef extends LuauLocal {
+	funcName!: string
+	params!: Array<LuauVarDef>
+	returnType: LuauTypeDef | undefined
+
+	constructor(funcName: string, params: Array<LuauVarDef>, returnType: LuauTypeDef | undefined) {
+		super(LuauLocalType.FuncDef)
+		this.funcName = funcName
+		this.params = params
+		this.returnType = returnType
 	}
 }
 

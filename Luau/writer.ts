@@ -54,6 +54,12 @@ export function write(ast: LuauAst.LuauProgram) {
 				case LuauAst.LuauExpressionType.MemberExpression:
 					written.push(writeMemberExpression(expression as LuauAst.LuauMemberExpression))
 					break
+				case LuauAst.LuauExpressionType.DictionaryExpression:
+					written.push(writeDictionaryExpression(expression as LuauAst.LuauDictionaryExpression))
+					break
+				case LuauAst.LuauExpressionType.ClosureExpression:
+					written.push(writeClosureExpression(expression as LuauAst.LuauClosureExpression))
+					break
 				default:
 					written.push("--[[ UNKNOWN EXPRESSION ]]")
 					break
@@ -103,6 +109,34 @@ export function write(ast: LuauAst.LuauProgram) {
 			}`
 	}
 
+	function writeDictionaryExpression(expression: LuauAst.LuauDictionaryExpression): string {
+		let written = "{\n"
+		indentLevel++
+		expression.keyValuePairs.forEach((member) => {
+			written += `${indent()}${writeLocals(new Array(member.key))} = ${writeExpressions(new Array<LuauAst.LuauExpression>(member.value))},\n`
+		})
+		indentLevel--
+		written += `${indent()}}`
+		return written
+	}
+
+	function writeFunctionDeclaration(statement: LuauAst.LuauFunctionDeclarationStatement): string {
+		let written = `function ${statement.funcDef.funcName}(${writeLocals(statement.funcDef.params)})${statement.funcDef.returnType != undefined ? `: ${writeTypeDef(statement.funcDef.returnType)}` : ""}\n`
+		indentLevel++
+		statement.body.forEach((stmt) => written += writeStatement(stmt))
+		indentLevel--
+		written += `${indent()}end;`
+		return written
+	}
+
+	function writeClosureExpression(expression: LuauAst.LuauClosureExpression): string {
+		let written = `function(${writeLocals(expression.params)})\n`
+		indentLevel++
+		expression.chunk.forEach((stmt) => written += writeStatement(stmt))
+		indentLevel--
+		written += `${indent()}end`
+		return written
+	}
 
 	// TODO: group expression in the transpiler (e.g "Hello world!"() -> ("Hello world!")())
 	function writeFunctionCallExpression(expression: LuauAst.LuauFunctionCallExpression): string {
@@ -176,7 +210,7 @@ export function write(ast: LuauAst.LuauProgram) {
 	}
 
 	function writeReturnStatement(values) {
-		return `${indent()}return ${writeExpressions(values)}\n`
+		return `${indent()}return ${writeExpressions(values)};\n`
 	}
 
 	function writeStatement(statement: LuauAst.LuauStatement) {
@@ -192,6 +226,9 @@ export function write(ast: LuauAst.LuauProgram) {
 				break
 			case LuauAst.LuauStatementType.ReturnStatement:
 				return writeReturnStatement((statement as LuauAst.LuauReturnStatement).values)
+				break
+			case LuauAst.LuauStatementType.FunctionDeclarationStatement:
+				return writeFunctionDeclaration(statement as LuauAst.LuauFunctionDeclarationStatement)
 				break
 			default:
 				return "-- Unknown Statement\n"
