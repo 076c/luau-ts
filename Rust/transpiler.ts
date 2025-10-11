@@ -1,6 +1,21 @@
 import * as Parser from './parser.js'
 import * as LuauAst from './../Luau/ast.js'
 import * as Tokenizer from './tokenizer.js'
+import * as TypeMap from './type_map.js'
+
+export interface CompileOptions {
+	// Use the Roblox bindings (e.g game.GetService -> game:GetService)
+	useRobloxBindings: boolean,
+
+	// Optimise constants (e.g 1 + 1 -> 2)
+	foldConstants: boolean,
+
+	// Use Luau bindings (e.g println! -> print)
+	useLuauBindings: boolean,
+
+	// Add a main function export (e.g main();)
+	useMainFuncExport: boolean,
+}
 
 // TODO:
 // unfortunately, to get a Service or perform a NAMECALL operation, you have to call __namecall (literally)
@@ -8,7 +23,7 @@ import * as Tokenizer from './tokenizer.js'
 // let x = __namecall(game, "GetService", "Players")
 // Though this will be definitely removed in the future
 
-export function transpile(program: Parser.Program) {
+export function transpile(program: Parser.Program, options: CompileOptions) {
 	let index = 0
 	let statements: Array<LuauAst.LuauStatement> = []
 
@@ -76,8 +91,25 @@ export function transpile(program: Parser.Program) {
 			case Parser.ExpressionType.UnaryExpression:
 				return new LuauAst.LuauUnaryExpression((expression as Parser.UnaryExpression).op, transpileExpression((expression as Parser.UnaryExpression).expression))
 			case Parser.ExpressionType.FunctionCall:
-				if ((expression as Parser.FunctionCallExpression).callee.expressionType == Parser.ExpressionType.Identifier && ((expression as Parser.FunctionCallExpression).callee as Parser.IdentifierExpression).name == "__namecall") {
-					return new LuauAst.LuauNameCallExpression(transpileExpression((expression as Parser.FunctionCallExpression).args[0]), ((expression as Parser.FunctionCallExpression).args[1].expressionType == Parser.ExpressionType.String ? ((expression as Parser.FunctionCallExpression).args[1] as Parser.StringExpression).string : ((expression as Parser.FunctionCallExpression).args[1] as Parser.IdentifierExpression).name), (expression as Parser.FunctionCallExpression).args.slice(2).map((e) => transpileExpression(e)))
+				let funcCall = expression as Parser.FunctionCallExpression
+				if (options.useLuauBindings == true) {
+					if (funcCall.callee.expressionType == Parser.ExpressionType.MemberExpression) {
+						if ((funcCall.callee as Parser.MemberExpression).object.expressionType == Parser.ExpressionType.String) {
+							if ((funcCall.callee as Parser.MemberExpression).property.expressionType == Parser.ExpressionType.Identifier && TypeMap.stringFuncMap[(((funcCall.callee as Parser.MemberExpression).property as Parser.IdentifierExpression).name)]) {
+								return TypeMap.stringFuncMap[(((funcCall.callee as Parser.MemberExpression).property as Parser.IdentifierExpression).name)](transpileExpression((funcCall.callee as Parser.MemberExpression).object))
+							}
+						}
+					}
+					if (funcCall.callee.expressionType == Parser.ExpressionType.Identifier && TypeMap.funcMap[(funcCall.callee as Parser.IdentifierExpression).name]) {
+						if (typeof TypeMap.funcMap[(funcCall.callee as Parser.IdentifierExpression).name] == "string") {
+							return new LuauAst.LuauFunctionCallExpression(new LuauAst.LuauIdentifierExpression(TypeMap.funcMap[(funcCall.callee as Parser.IdentifierExpression).name]), funcCall.args.map((e) => transpileExpression(e)))
+						} else {
+							return TypeMap.funcMap[(funcCall.callee as Parser.IdentifierExpression).name](funcCall.args.map((e) => transpileExpression(e)))
+						}
+					}
+					if ((funcCall.callee.expressionType == Parser.ExpressionType.Identifier && ((funcCall.callee as Parser.IdentifierExpression).name == "__namecall"))) {
+						return new LuauAst.LuauNameCallExpression(transpileExpression((expression as Parser.FunctionCallExpression).args[0]), ((expression as Parser.FunctionCallExpression).args[1].expressionType == Parser.ExpressionType.String ? ((expression as Parser.FunctionCallExpression).args[1] as Parser.StringExpression).string : ((expression as Parser.FunctionCallExpression).args[1] as Parser.IdentifierExpression).name), (expression as Parser.FunctionCallExpression).args.slice(2).map((e) => transpileExpression(e)))
+					}
 				}
 				return new LuauAst.LuauFunctionCallExpression(transpileExpression((expression as Parser.FunctionCallExpression).callee), (expression as Parser.FunctionCallExpression).args.map((e) => transpileExpression(e)))
 			case Parser.ExpressionType.MatchExpression:
@@ -250,6 +282,30 @@ export function transpile(program: Parser.Program) {
 		if (ts) statements.push(ts)
 
 		index++
+	}
+
+	if (options.useMainFuncExport == true) {
+		let mainFuncExport = undefined;
+		statements.forEach((stmt) => {
+			if (stmt.statementType == LuauAst.LuauStatementType.FunctionDeclarationStatement) {
+				let funcStmt = stmt as LuauAst.LuauFunctionDeclarationStatement
+				if (funcStmt.funcDef.funcName == "main") {
+					mainFuncExport = funcStmt
+				}
+			}
+		})
+
+		if (mainFuncExport) {
+			statements.push(
+				new LuauAst.LuauExpressionStatement(
+					new LuauAst.LuauFunctionCallExpression(
+						new LuauAst.LuauIdentifierExpression("main"), []
+					)
+				)
+			)
+		} else {
+			transpilerError("useMainFuncExport is enabled but no main function was found", undefined)
+		}
 	}
 
 	// Luau transpiler checkup

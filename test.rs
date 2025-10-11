@@ -1,1 +1,3 @@
-(x + 2) * 3
+fn main() {
+    panic!("this should be paused!");
+}

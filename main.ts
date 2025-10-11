@@ -4,6 +4,7 @@ import { tokenize } from "./Rust/tokenizer.js";
 import { parse } from "./Rust/parser.js";
 import { transpile } from "./Rust/transpiler.js";
 import { write } from "./Luau/writer.js";
+import { CompileOptions } from "./Rust/transpiler.js";
 
 function usage(): void {
     console.log("Usage: node main.js [-i inputfile] [-o outputfile] [-n]");
@@ -14,9 +15,15 @@ function usage(): void {
 
 function processSource(source: string): string {
     try {
-        const tokens = tokenize(source);
-        const parsed = parse(tokens);
-        const luau = transpile(parsed);
+        let compileOptions: CompileOptions = {
+            useRobloxBindings: false,
+            foldConstants: false,
+            useLuauBindings: true,
+            useMainFuncExport: true,
+        }
+        const tokens = tokenize(source, compileOptions);
+        const parsed = parse(tokens, compileOptions);
+        const luau = transpile(parsed, compileOptions);
         return write(luau);
     } catch (e: any) {
         console.error("Error during processing:", e?.stack ?? e);

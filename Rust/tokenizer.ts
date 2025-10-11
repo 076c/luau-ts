@@ -1,3 +1,5 @@
+import { CompileOptions } from "./transpiler"
+
 export enum TokenType {
 	Unknown, // [?]
 	Identifier, // <identifier>
@@ -71,7 +73,7 @@ function tokenizerError(error: string, loc: LocRange | undefined): void {
 	console.error(`tokenizer: ${error}${loc !== undefined && `line #${loc.line} column ${loc.startingColumn}-${loc.endingColumn}` || ""}`)
 }
 
-export function tokenize(source: string): Array<Token> {
+export function tokenize(source: string, options: CompileOptions): Array<Token> {
 	let tokens: Array<Token> = new Array<Token>()
 	let position: number = 0
 	let line: number = 1

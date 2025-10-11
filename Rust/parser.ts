@@ -1,4 +1,5 @@
 import { LocRange, Token, tokenize, TokenType } from './tokenizer.js'
+import { CompileOptions } from './transpiler.js'
 
 export enum NodeType {
 	Expression,
@@ -409,7 +410,7 @@ export class Program {
 // 28: METHOD CALLS
 // 29: PATH
 
-export function parse(tokens: Array<Token>) {
+export function parse(tokens: Array<Token>, options: CompileOptions) {
 	let statements: Array<Statement> = []
 	let tokenIndex = 0
 
