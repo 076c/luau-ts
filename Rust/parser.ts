@@ -417,7 +417,16 @@ export function parse(tokens: Array<Token>) {
 		throw console.error(`parser: ${error}${loc !== undefined ? ` line: ${loc.line} column ${loc.startingColumn}-${loc.endingColumn}` : ""}`)
 	}
 
+	// TODO: :(
+	function mandatoryCommentCheck() {
+		while (tokens.at(tokenIndex)?.tokenType == TokenType.Comment) {
+			statements.push(new CommentStatement(tokens.at(tokenIndex)?.token))
+			tokenIndex++
+		}
+	}
+
 	function eat(): Token {
+		mandatoryCommentCheck()
 		let token = tokens.at(tokenIndex)
 
 		// if (token == undefined) {
@@ -429,6 +438,7 @@ export function parse(tokens: Array<Token>) {
 	}
 
 	function current(): Token {
+		mandatoryCommentCheck()
 		let token = tokens.at(tokenIndex)
 
 		// if (token == undefined) {
@@ -439,6 +449,7 @@ export function parse(tokens: Array<Token>) {
 	}
 
 	function eatTypeOf(type: TokenType) {
+		mandatoryCommentCheck()
 		let token = tokens.at(tokenIndex)
 
 		// if (token == undefined) {
@@ -865,19 +876,30 @@ export function parse(tokens: Array<Token>) {
 				type = parseTypeDefinition()
 			}
 			args.push(new VarDef(name, type))
+			if (current()?.tokenType == TokenType.Comma) {
+				eatTypeOf(TokenType.Comma)
+			} else {
+				break
+			}
 			if (tokenIndex === before) parserError('unable to parse function argument', current()?.loc)
 		}
 		let closingPipe = eatTypeOf(TokenType.Pipe)
-		let openingBracket = eatTypeOf(TokenType.OpeningCurlyBracket)
 		let body: Array<Statement> = []
-		while (current()?.tokenType != TokenType.ClosingCurlyBracket) {
-			let before = tokenIndex
+		if (current()?.tokenType == TokenType.OpeningCurlyBracket) {
+			let openingBracket = eatTypeOf(TokenType.OpeningCurlyBracket)
+			while (current()?.tokenType != TokenType.ClosingCurlyBracket) {
+				let before = tokenIndex
+				let stmt = parseStatement()
+				if (stmt === undefined) parserError('unable to parse statement in chunk', current()?.loc)
+				body.push(stmt)
+				if (tokenIndex === before) parserError('parser did not advance while parsing chunk', current()?.loc)
+			}
+			let closingBracket = eatTypeOf(TokenType.ClosingCurlyBracket)
+		} else {
 			let stmt = parseStatement()
 			if (stmt === undefined) parserError('unable to parse statement in chunk', current()?.loc)
 			body.push(stmt)
-			if (tokenIndex === before) parserError('parser did not advance while parsing chunk', current()?.loc)
 		}
-		let closingBracket = eatTypeOf(TokenType.ClosingCurlyBracket)
 		return new ClosureExpression(new Chunk(body), args)
 	}
 

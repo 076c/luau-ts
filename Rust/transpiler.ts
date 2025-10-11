@@ -2,6 +2,12 @@ import * as Parser from './parser.js'
 import * as LuauAst from './../Luau/ast.js'
 import * as Tokenizer from './tokenizer.js'
 
+// TODO:
+// unfortunately, to get a Service or perform a NAMECALL operation, you have to call __namecall (literally)
+// e.g 
+// let x = __namecall(game, "GetService", "Players")
+// Though this will be definitely removed in the future
+
 export function transpile(program: Parser.Program) {
 	let index = 0
 	let statements: Array<LuauAst.LuauStatement> = []
@@ -24,8 +30,7 @@ export function transpile(program: Parser.Program) {
 	function transpileExpression(expression: Parser.Expression) {
 		switch (expression.expressionType) {
 			case Parser.ExpressionType.Grouping:
-				// unwrap grouping and transpile inner expression
-				return transpileExpression((expression as any).expression)
+				return new LuauAst.LuauGroupedExpression(transpileExpression((expression as Parser.GroupingExpression).expression))
 
 			case Parser.ExpressionType.Identifier:
 				return new LuauAst.LuauIdentifierExpression((expression as Parser.IdentifierExpression).name)
@@ -54,12 +59,26 @@ export function transpile(program: Parser.Program) {
 						case '..':
 							return new LuauAst.LuauFunctionCallExpression(new LuauAst.LuauIdentifierExpression('Range.new'), [left, right])
 						default:
-							return new LuauAst.LuauBinaryExpression(left, bin.op, right)
+							let op
+							switch (bin.op) {
+								case '&&':
+									op = 'and'
+									break
+								case '||':
+									op = 'or'
+									break
+								default:
+									op = bin.op
+							}
+							return new LuauAst.LuauBinaryExpression(left, op, right)
 					}
 				}
 			case Parser.ExpressionType.UnaryExpression:
 				return new LuauAst.LuauUnaryExpression((expression as Parser.UnaryExpression).op, transpileExpression((expression as Parser.UnaryExpression).expression))
 			case Parser.ExpressionType.FunctionCall:
+				if ((expression as Parser.FunctionCallExpression).callee.expressionType == Parser.ExpressionType.Identifier && ((expression as Parser.FunctionCallExpression).callee as Parser.IdentifierExpression).name == "__namecall") {
+					return new LuauAst.LuauNameCallExpression(transpileExpression((expression as Parser.FunctionCallExpression).args[0]), ((expression as Parser.FunctionCallExpression).args[1].expressionType == Parser.ExpressionType.String ? ((expression as Parser.FunctionCallExpression).args[1] as Parser.StringExpression).string : ((expression as Parser.FunctionCallExpression).args[1] as Parser.IdentifierExpression).name), (expression as Parser.FunctionCallExpression).args.slice(2).map((e) => transpileExpression(e)))
+				}
 				return new LuauAst.LuauFunctionCallExpression(transpileExpression((expression as Parser.FunctionCallExpression).callee), (expression as Parser.FunctionCallExpression).args.map((e) => transpileExpression(e)))
 			case Parser.ExpressionType.MatchExpression:
 				/*

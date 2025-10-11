@@ -60,6 +60,12 @@ export function write(ast: LuauAst.LuauProgram) {
 				case LuauAst.LuauExpressionType.ClosureExpression:
 					written.push(writeClosureExpression(expression as LuauAst.LuauClosureExpression))
 					break
+				case LuauAst.LuauExpressionType.NameCallExpression:
+					written.push(writeNameCallExpression(expression as LuauAst.LuauNameCallExpression))
+					break
+				case LuauAst.LuauExpressionType.GroupedExpression:
+					written.push(writeGroupedExpression(expression as LuauAst.LuauGroupedExpression))
+					break
 				default:
 					written.push("--[[ UNKNOWN EXPRESSION ]]")
 					break
@@ -67,6 +73,10 @@ export function write(ast: LuauAst.LuauProgram) {
 		})
 
 		return written.join(", ")
+	}
+
+	function writeGroupedExpression(expression: LuauAst.LuauGroupedExpression): string {
+		return `(${writeExpressions(new Array<LuauAst.LuauExpression>(expression.expression))})`
 	}
 
 	function writeMemberExpression(expression: LuauAst.LuauMemberExpression): string {
@@ -149,6 +159,10 @@ export function write(ast: LuauAst.LuauProgram) {
 		} else {
 			return `${writeExpressions(new Array<LuauAst.LuauExpression>(expression.callee))}(${writeExpressions(expression.args)})`
 		}
+	}
+
+	function writeNameCallExpression(expression: LuauAst.LuauNameCallExpression): string {
+		return `${writeExpressions(new Array<LuauAst.LuauExpression>(expression.callee))}:${expression.method}(${writeExpressions(expression.args)})`
 	}
 
 	function writeUnaryExpression(expression: LuauAst.LuauUnaryExpression): string {

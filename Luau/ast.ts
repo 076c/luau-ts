@@ -24,7 +24,9 @@ export enum LuauExpressionType {
 	ClosureExpression,
 	MemberExpression,
 	FieldExpression,
-	DictionaryExpression
+	DictionaryExpression,
+	NameCallExpression,
+	GroupedExpression
 }
 
 export enum LuauLocalType {
@@ -137,6 +139,19 @@ export class LuauFunctionCallExpression extends LuauExpression {
 	}
 }
 
+export class LuauNameCallExpression extends LuauExpression {
+	callee!: LuauExpression
+	method!: string
+	args!: Array<LuauExpression>
+
+	constructor(callee: LuauExpression, method: string, args: Array<LuauExpression>) {
+		super(LuauExpressionType.NameCallExpression)
+		this.callee = callee
+		this.method = method
+		this.args = args
+	}
+}
+
 export class LuauMemberExpression extends LuauExpression {
 	object!: LuauExpression
 	property!: LuauExpression
@@ -176,6 +191,15 @@ export class LuauFunctionDeclarationStatement extends LuauStatement {
 		super(LuauStatementType.FunctionDeclarationStatement)
 		this.funcDef = funcDef
 		this.body = body
+	}
+}
+
+export class LuauGroupedExpression extends LuauExpression {
+	expression!: LuauExpression
+
+	constructor(expression: LuauExpression) {
+		super(LuauExpressionType.GroupedExpression)
+		this.expression = expression
 	}
 }
 
