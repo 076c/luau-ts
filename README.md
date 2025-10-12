@@ -1,5 +1,8 @@
 # Luau TS
 
+[!IMPORTANT]
+> This transpiler / module is a W.I.P
+
 # What is this?
 This module provides a standard Luau Abstract Syntax Tree in TypeScript. It is designed to be used as a transpiler
 
