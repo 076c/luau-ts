@@ -1,6 +1,6 @@
 # Luau TS
 
-[!IMPORTANT]
+> [!IMPORTANT]
 > This transpiler / module is a W.I.P
 
 # What is this?
